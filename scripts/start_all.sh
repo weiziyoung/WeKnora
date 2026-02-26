@@ -110,6 +110,24 @@ check_env_file() {
     return 0
 }
 
+# 检测并配置 Docker Compose Profiles
+detect_profiles() {
+    # 确保环境变量已加载
+    if [ -z "$STORAGE_TYPE" ] && [ -f "$PROJECT_ROOT/.env" ]; then
+        source "$PROJECT_ROOT/.env"
+    fi
+
+    local storage_type=${STORAGE_TYPE:-local}
+    
+    COMPOSE_PROFILES_ARGS=""
+    
+    if [ "$storage_type" = "minio" ]; then
+        COMPOSE_PROFILES_ARGS="$COMPOSE_PROFILES_ARGS --profile minio"
+    fi
+    
+    export COMPOSE_PROFILES_ARGS
+}
+
 # 安装Ollama（根据平台不同采用不同方法）
 install_ollama() {
     # 检查是否为远程服务
@@ -353,22 +371,28 @@ start_docker() {
     source "$PROJECT_ROOT/.env"
     storage_type=${STORAGE_TYPE:-local}
     
+    # 检测 Profiles
+    detect_profiles
+    if [ -n "$COMPOSE_PROFILES_ARGS" ]; then
+        log_info "激活 Profiles: $COMPOSE_PROFILES_ARGS"
+    fi
+    
     check_platform
     
     # 进入项目根目录再执行docker-compose命令
     cd "$PROJECT_ROOT"
     
     # 启动基本服务
-    log_info "启动核心服务容器..."
+    log_info "启动服务容器..."
 	# 统一通过已检测到的 Compose 命令启动
 	if [ "$NO_PULL" = true ]; then
 		# 不拉取镜像，使用本地镜像
 		log_info "跳过镜像拉取，使用本地镜像..."
-		PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD up --build -d
+		PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD $COMPOSE_PROFILES_ARGS up --build -d
 	else
 		# 拉取最新镜像
 		log_info "拉取最新镜像..."
-		PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD up --pull always -d
+		PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD $COMPOSE_PROFILES_ARGS up --pull always -d
 	fi
     if [ $? -ne 0 ]; then
         log_error "Docker容器启动失败"
@@ -425,9 +449,12 @@ list_containers() {
     # 进入项目根目录再执行docker-compose命令
     cd "$PROJECT_ROOT"
     
+    # 检测 Profiles (为了能显示 Profile 启用的服务)
+    detect_profiles
+
     # 列出所有容器
     printf "%b\n" "${BLUE}当前正在运行的容器:${NC}"
-	"$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD ps --services | sort
+	"$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD $COMPOSE_PROFILES_ARGS ps --services | sort
     
     return 0
 }
@@ -448,6 +475,12 @@ pull_images() {
     # 读取.env文件
     source "$PROJECT_ROOT/.env"
     storage_type=${STORAGE_TYPE:-local}
+
+    # 检测 Profiles
+    detect_profiles
+    if [ -n "$COMPOSE_PROFILES_ARGS" ]; then
+        log_info "激活 Profiles: $COMPOSE_PROFILES_ARGS"
+    fi
     
     check_platform
     
@@ -456,7 +489,7 @@ pull_images() {
     
     # 拉取所有镜像
     log_info "拉取所有服务的最新镜像..."
-	PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD pull
+	PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD $COMPOSE_PROFILES_ARGS pull
     if [ $? -ne 0 ]; then
         log_error "镜像拉取失败"
         return 1
@@ -500,24 +533,27 @@ restart_container() {
     # 进入项目根目录再执行docker-compose命令
     cd "$PROJECT_ROOT"
     
+    # 检测 Profiles
+    detect_profiles
+
     # 检查容器是否存在
-	if ! "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD ps --services | grep -q "^$container_name$"; then
-        log_error "容器 '$container_name' 不存在或未运行"
-        echo "可用的容器有:"
+	if ! "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD $COMPOSE_PROFILES_ARGS ps --services | grep -q "^$container_name$"; then
+        log_error "服务 '$container_name' 不存在或未启用 (请检查拼写或 Profile 配置)"
+        echo "可用的服务有:"
         list_containers
         return 1
     fi
     
     # 构建并重启容器
-    log_info "正在重新构建容器 '$container_name'..."
-	PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD build "$container_name"
+    log_info "正在重新构建服务 '$container_name'..."
+	PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD $COMPOSE_PROFILES_ARGS build "$container_name"
     if [ $? -ne 0 ]; then
-        log_error "容器 '$container_name' 构建失败"
+        log_error "服务 '$container_name' 构建失败"
         return 1
     fi
     
-    log_info "正在重启容器 '$container_name'..."
-	PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD up -d --no-deps "$container_name"
+    log_info "正在重启服务 '$container_name'..."
+	PLATFORM=$PLATFORM "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD $COMPOSE_PROFILES_ARGS up -d --no-deps "$container_name"
     if [ $? -ne 0 ]; then
         log_error "容器 '$container_name' 重启失败"
         return 1

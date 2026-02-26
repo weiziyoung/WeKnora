@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Documents</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="/documents" class="btn btn-sm btn-outline-secondary {{ 'active' if not current_status else '' }}">All</a>
+            <a href="/documents?status=discover" class="btn btn-sm btn-outline-info {{ 'active' if current_status == 'discover' else '' }}">Discover</a>
+            <a href="/documents?status=pending" class="btn btn-sm btn-outline-warning {{ 'active' if current_status == 'pending' else '' }}">Pending</a>
+            <a href="/documents?status=processing" class="btn btn-sm btn-outline-primary {{ 'active' if current_status == 'processing' else '' }}">Processing</a>
+            <a href="/documents?status=completed" class="btn btn-sm btn-outline-success {{ 'active' if current_status == 'completed' else '' }}">Completed</a>
+            <a href="/documents?status=failed" class="btn btn-sm btn-outline-danger {{ 'active' if current_status == 'failed' else '' }}">Failed</a>
+             <a href="/documents?status=deleted" class="btn btn-sm btn-outline-secondary {{ 'active' if current_status == 'deleted' else '' }}">Deleted</a>
+        </div>
+    </div>
+</div>
+
+<div class="table-responsive bg-white rounded shadow-sm">
+    <table class="table table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Filename</th>
+                <th>Status</th>
+                <th>Knowledge ID</th>
+                <th>Size (KB)</th>
+                <th>Last Updated</th>
+                <th>Message</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for doc in documents %}
+            <tr>
+                <td>{{ doc.id }}</td>
+                <td title="{{ doc.filepath }}">
+                    {{ doc.filename }}
+                    <br><small class="text-muted" style="font-size:0.7em">{{ doc.filepath[-40:] }}</small>
+                </td>
+                <td>
+                    {% set badge_class = 'secondary' %}
+                    {% if doc.file_status == 'discover' %}{% set badge_class = 'info' %}
+                    {% elif doc.file_status == 'pending' %}{% set badge_class = 'warning' %}
+                    {% elif doc.file_status == 'processing' %}{% set badge_class = 'primary' %}
+                    {% elif doc.file_status == 'completed' %}{% set badge_class = 'success' %}
+                    {% elif doc.file_status == 'failed' %}{% set badge_class = 'danger' %}
+                    {% endif %}
+                    <span class="badge bg-{{ badge_class }}">{{ doc.file_status }}</span>
+                </td>
+                <td><small class="font-monospace">{{ doc.knowledge_id or '-' }}</small></td>
+                <td>{{ (doc.file_size / 1024)|round(1) }}</td>
+                <td><small>{{ doc.process_at or doc.created_at }}</small></td>
+                <td class="text-danger small">{{ doc.failed_msg or '' }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="7" class="text-center py-4">No documents found.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<nav aria-label="Page navigation" class="mt-4">
+  <ul class="pagination justify-content-center">
+    <li class="page-item {{ 'disabled' if page_num <= 1 else '' }}">
+      <a class="page-link" href="/documents?page={{ page_num - 1 }}&status={{ current_status }}">Previous</a>
+    </li>
+    <li class="page-item disabled"><span class="page-link">Page {{ page_num }}</span></li>
+    <li class="page-item {{ 'disabled' if not has_next else '' }}">
+      <a class="page-link" href="/documents?page={{ page_num + 1 }}&status={{ current_status }}">Next</a>
+    </li>
+  </ul>
+</nav>
+{% endblock %}

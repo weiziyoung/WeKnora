@@ -94,6 +94,14 @@ class DocReaderConfig:
 
     # Other
     mineru_endpoint: str
+    mineru_api_token: str
+
+    # OSS (Aliyun)
+    oss_access_key: str
+    oss_secret_key: str
+    oss_endpoint: str
+    oss_bucket: str
+    oss_region: str
 
 
 def load_config() -> DocReaderConfig:
@@ -181,6 +189,16 @@ def load_config() -> DocReaderConfig:
 
     # Other
     mineru_endpoint = _get_str(["DOCREADER_MINERU_ENDPOINT", "MINERU_ENDPOINT"], "")
+    mineru_api_token = _get_str(["DOCREADER_MINERU_API_TOKEN", "MINERU_API_TOKEN"], "")
+    
+    # OSS
+    oss_access_key = _get_str(["DOCREADER_OSS_ACCESS_KEY", "OSS_ACCESS_KEY"], "")
+    oss_secret_key = _get_str(["DOCREADER_OSS_SECRET_KEY", "OSS_SECRET_KEY"], "")
+    oss_endpoint = _get_str(["DOCREADER_OSS_ENDPOINT", "OSS_ENDPOINT"], "")
+    oss_bucket = _get_str(["DOCREADER_OSS_BUCKET", "OSS_BUCKET"], "")
+    oss_region = _get_str(["DOCREADER_OSS_REGION", "OSS_REGION"], "")
+
+    logger.info(f"Loaded Config - MinerU Endpoint: '{mineru_endpoint}', API Token: '{mineru_api_token}'")
 
     return DocReaderConfig(
         grpc_max_workers=grpc_max_workers,
@@ -214,8 +232,13 @@ def load_config() -> DocReaderConfig:
         minio_use_ssl=minio_use_ssl,
         local_storage_base_dir=local_storage_base_dir,
         mineru_endpoint=mineru_endpoint,
+        mineru_api_token=mineru_api_token,
+        oss_access_key=oss_access_key,
+        oss_secret_key=oss_secret_key,
+        oss_endpoint=oss_endpoint,
+        oss_bucket=oss_bucket,
+        oss_region=oss_region,
     )
-
 
 CONFIG = load_config()
 
@@ -273,6 +296,7 @@ def dump_config(mask_secrets: bool = True) -> Dict[str, Any]:
         "DOCREADER_LOCAL_STORAGE_BASE_DIR": cfg.local_storage_base_dir,
         # Other
         "DOCREADER_MINERU_ENDPOINT": cfg.mineru_endpoint,
+        "DOCREADER_MINERU_API_TOKEN": _mask_secret(cfg.mineru_api_token) if mask_secrets else cfg.mineru_api_token,
     }
     return d
 

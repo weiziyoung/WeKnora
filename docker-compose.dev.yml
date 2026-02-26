@@ -27,7 +27,7 @@ services:
     image: redis:7.0-alpine
     container_name: WeKnora-redis-dev
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-6375}:6375"
     volumes:
       - redis_data_dev:/data
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
@@ -116,6 +116,7 @@ services:
       - STORAGE_TYPE=${STORAGE_TYPE:-}
       - MINIO_PUBLIC_ENDPOINT=http://localhost:${MINIO_PORT:-9000}
       - MINERU_ENDPOINT=${MINERU_ENDPOINT:-}
+      - MINERU_API_TOKEN=${MINERU_API_TOKEN:-}
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-}}
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50051"]

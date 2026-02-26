@@ -144,10 +144,18 @@ services:
     container_name: WeKnora-docreader
     ports:
       - "${DOCREADER_PORT:-50051}:50051"
+    volumes:
+      - ./docreader:/app/docreader
     environment:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_PUBLIC_ENDPOINT=http://localhost:${MINIO_PORT:-9000}
       - MINERU_ENDPOINT=${MINERU_ENDPOINT:-}
+      - MINERU_API_TOKEN=${MINERU_API_TOKEN:-}
+      - OSS_ACCESS_KEY=${OSS_ACCESS_KEY:-}
+      - OSS_SECRET_KEY=${OSS_SECRET_KEY:-}
+      - OSS_ENDPOINT=${OSS_ENDPOINT:-}
+      - OSS_BUCKET=${OSS_BUCKET:-}
+      - OSS_REGION=${OSS_REGION:-}
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-}
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50051"]

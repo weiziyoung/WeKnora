@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">Script Execution Logs</h2>
+<div class="table-responsive bg-white rounded shadow-sm">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Script Name</th>
+                <th>Timestamp</th>
+                <th>Duration (s)</th>
+                <th>Total Count</th>
+                <th>Ins/Upd/Del</th>
+                <th>Status</th>
+                <th>Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for log in logs %}
+            <tr>
+                <td>{{ log.id }}</td>
+                <td>{{ log.script_name }}</td>
+                <td>{{ log.process_timestamp }}</td>
+                <td>{{ "%.2f"|format(log.process_duration) }}</td>
+                <td>{{ log.process_count }}</td>
+                <td>
+                    <span class="text-success">+{{ log.insert_count }}</span> / 
+                    <span class="text-primary">~{{ log.update_count }}</span> / 
+                    <span class="text-danger">-{{ log.delete_count }}</span>
+                </td>
+                <td>
+                    <span class="badge bg-{{ 'success' if log.status == 'success' else 'danger' }}">
+                        {{ log.status }}
+                    </span>
+                </td>
+                <td class="small text-danger">{{ log.failed_reason or '' }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

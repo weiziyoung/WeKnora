@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="mb-3">Task Overview</h2>
+        <div class="row g-3">
+            <div class="col-md-2">
+                <div class="card card-stat text-white bg-primary h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Files</h5>
+                        <p class="card-text display-6">{{ stats.total }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card card-stat text-white bg-info h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Discover</h5>
+                        <p class="card-text display-6">{{ stats.discover }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card card-stat text-white bg-warning h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Pending</h5>
+                        <p class="card-text display-6">{{ stats.pending }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card card-stat text-white bg-primary h-100" style="background-color: #6610f2 !important;">
+                    <div class="card-body">
+                        <h5 class="card-title">Processing</h5>
+                        <p class="card-text display-6">{{ stats.processing }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card card-stat text-white bg-success h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Completed</h5>
+                        <p class="card-text display-6">{{ stats.completed }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="card card-stat text-white bg-danger h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Failed</h5>
+                        <p class="card-text display-6">{{ stats.failed }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Recent Failures</div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                {% for fail in recent_fails %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1 text-truncate" title="{{ fail.filename }}">{{ fail.filename }}</h6>
+                            <small class="text-muted">{{ fail.process_at }}</small>
+                        </div>
+                        <p class="mb-1 text-danger small">{{ fail.failed_msg }}</p>
+                    </div>
+                {% else %}
+                    <div class="list-group-item text-center text-muted">No recent failures</div>
+                {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer text-center">
+                <a href="/documents?status=failed" class="btn btn-sm btn-outline-secondary">View All Failed</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Latest Script Runs</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Script</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>Count</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for run in recent_runs %}
+                            <tr>
+                                <td>{{ run.script_name }}</td>
+                                <td>{{ run.process_timestamp }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if run.status == 'success' else 'danger' }}">
+                                        {{ run.status }}
+                                    </span>
+                                </td>
+                                <td>{{ run.process_count }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+             <div class="card-footer text-center">
+                <a href="/logs" class="btn btn-sm btn-outline-secondary">View All Logs</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
