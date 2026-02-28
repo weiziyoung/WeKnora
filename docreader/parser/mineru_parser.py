@@ -5,7 +5,7 @@ import zipfile
 import io
 import os
 import uuid
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from io import BytesIO
 
 import markdownify
