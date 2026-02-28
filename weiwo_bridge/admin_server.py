@@ -1,42 +1,44 @@
 from flask import Flask, render_template, request
-import sqlite3
 import os
+from sqlalchemy import func, desc
+from database import get_session, DocumentStatus, ScriptProcessRecord, DB_PATH
 
 app = Flask(__name__)
-DB_PATH = 'weknora_bridge.db'
-
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 @app.route('/')
 def dashboard():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Stats
-    cursor.execute("SELECT file_status, COUNT(*) as count FROM document_status_table GROUP BY file_status")
-    rows = cursor.fetchall()
-    stats = {
-        'total': 0, 'discover': 0, 'pending': 0, 'processing': 0, 'completed': 0, 'failed': 0, 'deleted': 0
-    }
-    for row in rows:
-        status = row['file_status']
-        count = row['count']
-        stats[status] = count
-        stats['total'] += count
+    session = get_session()
+    try:
+        # Stats
+        # cursor.execute("SELECT file_status, COUNT(*) as count FROM document_status_table GROUP BY file_status")
+        rows = session.query(
+            DocumentStatus.file_status, 
+            func.count(DocumentStatus.id).label('count')
+        ).group_by(DocumentStatus.file_status).all()
         
-    # Recent Failures
-    cursor.execute("SELECT filename, failed_msg, process_at FROM document_status_table WHERE file_status='failed' ORDER BY process_at DESC LIMIT 5")
-    recent_fails = cursor.fetchall()
-    
-    # Recent Runs
-    cursor.execute("SELECT script_name, process_timestamp, status, process_count FROM script_process_record ORDER BY process_timestamp DESC LIMIT 5")
-    recent_runs = cursor.fetchall()
-    
-    conn.close()
-    return render_template('dashboard.html', page='dashboard', stats=stats, recent_fails=recent_fails, recent_runs=recent_runs)
+        stats = {
+            'total': 0, 'discover': 0, 'pending': 0, 'processing': 0, 'completed': 0, 'failed': 0, 'deleted': 0
+        }
+        for status, count in rows:
+            if status in stats:
+                stats[status] = count
+            stats['total'] += count
+            
+        # Recent Failures
+        # cursor.execute("SELECT filename, failed_msg, process_at FROM document_status_table WHERE file_status='failed' ORDER BY process_at DESC LIMIT 5")
+        recent_fails = session.query(DocumentStatus).filter(
+            DocumentStatus.file_status == 'failed'
+        ).order_by(desc(DocumentStatus.process_at)).limit(5).all()
+        
+        # Recent Runs
+        # cursor.execute("SELECT script_name, process_timestamp, status, process_count FROM script_process_record ORDER BY process_timestamp DESC LIMIT 5")
+        recent_runs = session.query(ScriptProcessRecord).order_by(
+            desc(ScriptProcessRecord.process_timestamp)
+        ).limit(5).all()
+        
+        return render_template('dashboard.html', page='dashboard', stats=stats, recent_fails=recent_fails, recent_runs=recent_runs)
+    finally:
+        session.close()
 
 @app.route('/documents')
 def documents():
@@ -45,37 +47,34 @@ def documents():
     per_page = 20
     offset = (page - 1) * per_page
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    query = "SELECT * FROM document_status_table"
-    params = []
-    if status:
-        query += " WHERE file_status = ?"
-        params.append(status)
-    
-    query += " ORDER BY id DESC LIMIT ? OFFSET ?"
-    params.extend([per_page, offset])
-    
-    cursor.execute(query, params)
-    docs = cursor.fetchall()
-    
-    # Check if has next page
-    cursor.execute(f"SELECT COUNT(*) FROM document_status_table {'WHERE file_status = ?' if status else ''}", [status] if status else [])
-    total_count = cursor.fetchone()[0]
-    has_next = (offset + per_page) < total_count
-    
-    conn.close()
-    return render_template('documents.html', page='documents', documents=docs, current_status=status, page_num=page, has_next=has_next)
+    session = get_session()
+    try:
+        query = session.query(DocumentStatus)
+        
+        if status:
+            query = query.filter(DocumentStatus.file_status == status)
+        
+        # Total count for pagination
+        total_count = query.count()
+        
+        # Fetch documents
+        docs = query.order_by(desc(DocumentStatus.id)).limit(per_page).offset(offset).all()
+        
+        has_next = (offset + per_page) < total_count
+        
+        return render_template('documents.html', page='documents', documents=docs, current_status=status, page_num=page, has_next=has_next)
+    finally:
+        session.close()
 
 @app.route('/logs')
 def logs():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM script_process_record ORDER BY id DESC LIMIT 50")
-    logs = cursor.fetchall()
-    conn.close()
-    return render_template('logs.html', page='logs', logs=logs)
+    session = get_session()
+    try:
+        # cursor.execute("SELECT * FROM script_process_record ORDER BY id DESC LIMIT 50")
+        logs = session.query(ScriptProcessRecord).order_by(desc(ScriptProcessRecord.id)).limit(50).all()
+        return render_template('logs.html', page='logs', logs=logs)
+    finally:
+        session.close()
 
 if __name__ == '__main__':
     # Initialize DB if not exists (using discover_files logic or just let it fail if no DB)

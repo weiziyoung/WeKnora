@@ -297,6 +297,12 @@ def dump_config(mask_secrets: bool = True) -> Dict[str, Any]:
         # Other
         "DOCREADER_MINERU_ENDPOINT": cfg.mineru_endpoint,
         "DOCREADER_MINERU_API_TOKEN": _mask_secret(cfg.mineru_api_token) if mask_secrets else cfg.mineru_api_token,
+        # OSS
+        "DOCREADER_OSS_ACCESS_KEY": _mask_secret(cfg.oss_access_key) if mask_secrets else cfg.oss_access_key,
+        "DOCREADER_OSS_SECRET_KEY": _mask_secret(cfg.oss_secret_key) if mask_secrets else cfg.oss_secret_key,
+        "DOCREADER_OSS_ENDPOINT": cfg.oss_endpoint,
+        "DOCREADER_OSS_BUCKET": cfg.oss_bucket,
+        "DOCREADER_OSS_REGION": cfg.oss_region,
     }
     return d
 

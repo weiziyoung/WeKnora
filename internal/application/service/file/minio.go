@@ -47,6 +47,24 @@ func NewMinioFileService(endpoint,
 		}
 	}
 
+	// Set bucket policy to public read-only
+	// This ensures that images and other public assets can be accessed directly
+	policy := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Principal": {"AWS": ["*"]},
+				"Action": ["s3:GetObject"],
+				"Resource": ["arn:aws:s3:::%s/*"]
+			}
+		]
+	}`, bucketName)
+
+	if err := client.SetBucketPolicy(context.Background(), bucketName, policy); err != nil {
+		return nil, fmt.Errorf("failed to set bucket policy: %w", err)
+	}
+
 	return &minioFileService{
 		client:     client,
 		bucketName: bucketName,

@@ -3,7 +3,7 @@
 # 生成 protobuf 代码
 proto:
 	@echo "Generating protobuf code..."
-	@sh ./scripts/generate_proto.sh
+	@bash ./scripts/generate_proto.sh
 
 # 构建 Go 客户端
 build:

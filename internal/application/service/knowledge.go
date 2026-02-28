@@ -2317,6 +2317,14 @@ func (s *knowledgeService) UpdateKnowledge(ctx context.Context, knowledge *types
 	if knowledge.Title != "" {
 		record.Title = knowledge.Title
 	}
+	if knowledge.FileName != "" {
+		safeFilename, isValid := secutils.ValidateInput(knowledge.FileName)
+		if !isValid {
+			return werrors.NewValidationError("文件名包含非法字符")
+		}
+		record.FileName = safeFilename
+	}
+	logger.Infof(ctx, "Safe filename: %s", knowledge.FileName)
 
 	// Update knowledge record in the repository
 	if err := s.repo.UpdateKnowledge(ctx, record); err != nil {

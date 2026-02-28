@@ -1,14 +1,14 @@
 import os
-import sqlite3
-import hashlib
 import time
 import requests
 import logging
 from datetime import datetime
 from typing import Dict, Set
 
+# Import ORM models
+from database import DocumentStatus, ScriptProcessRecord, init_db, get_session
+
 # Configuration
-DB_PATH = 'weknora_bridge.db'
 API_BASE_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
 
 # Directory Configuration
@@ -42,57 +42,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-
-def get_db_connection():
-    """Create a database connection with WAL mode enabled."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    # Enable Write-Ahead Logging for concurrency
-    conn.execute('PRAGMA journal_mode=WAL;')
-    return conn
-
-def init_db():
-    """Initialize database tables if they don't exist."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # document_status_table
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS document_status_table (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        filename TEXT NOT NULL,
-        filepath TEXT NOT NULL UNIQUE,
-        file_status TEXT DEFAULT 'discover',
-        created_at DATETIME,
-        last_modified_time REAL,
-        process_at DATETIME,
-        finish_at DATETIME,
-        failed_msg TEXT,
-        file_size INTEGER,
-        file_hash TEXT,
-        file_store_path TEXT,
-        knowledge_id TEXT
-    )
-    ''')
-    
-    # script_process_record
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS script_process_record (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        script_name TEXT,
-        process_duration REAL,
-        process_count INTEGER,
-        insert_count INTEGER,
-        update_count INTEGER,
-        delete_count INTEGER,
-        process_timestamp DATETIME,
-        status TEXT,
-        failed_reason TEXT
-    )
-    ''')
-    
-    conn.commit()
-    conn.close()
 
 def delete_knowledge_api(knowledge_id: str) -> bool:
     """Call API to delete knowledge from RAG system."""
@@ -163,16 +112,15 @@ def main():
     
     logging.info("Starting discovery process...")
     
+    session = get_session()
+    
     try:
         init_db()
-        conn = get_db_connection()
-        cursor = conn.cursor()
         
         # 1. Get existing DB files (excluding already deleted ones)
         logging.info("Fetching existing records from database...")
-        cursor.execute("SELECT filepath, file_size, last_modified_time, file_hash, file_status, knowledge_id FROM document_status_table WHERE file_status != 'deleted'")
-        db_rows = cursor.fetchall()
-        db_files = {row['filepath']: dict(row) for row in db_rows}
+        existing_docs = session.query(DocumentStatus).filter(DocumentStatus.file_status != 'deleted').all()
+        db_files = {doc.filepath: doc for doc in existing_docs}
         
         # 2. Scan current files on disk
         logging.info("Scanning file system...")
@@ -188,11 +136,15 @@ def main():
         
         for fp in new_filepaths:
             info = current_files[fp]
-            
-            cursor.execute('''
-                INSERT INTO document_status_table (filename, filepath, file_status, created_at, last_modified_time, file_size, file_hash)
-                VALUES (?, ?, 'discover', ?, ?, ?, NULL)
-            ''', (info['filename'], fp, datetime.now(), info['mtime'], info['size']))
+            new_doc = DocumentStatus(
+                filename=info['filename'],
+                filepath=fp,
+                file_status='discover',
+                created_at=datetime.now(),
+                last_modified_time=info['mtime'],
+                file_size=info['size']
+            )
+            session.add(new_doc)
             insert_count += 1
             
         # 3.2 Updates (Files in both, check for changes)
@@ -201,27 +153,28 @@ def main():
         
         for fp in potential_updates:
             curr_info = current_files[fp]
-            db_info = db_files[fp]
+            db_doc = db_files[fp]
             
             # Skip if file is currently being processed to avoid race conditions
-            if db_info['file_status'] == 'processing':
+            if db_doc.file_status == 'processing':
                 continue
                 
             # Check metadata first (mtime or size)
-            # Use a small epsilon for float comparison if needed, but direct inequality is usually fine for mtime
-            if curr_info['mtime'] > db_info['last_modified_time'] or curr_info['size'] != db_info['file_size']:
+            if curr_info['mtime'] > db_doc.last_modified_time or curr_info['size'] != db_doc.file_size:
                 # Metadata changed, assume content updated
                 logging.info(f"File updated: {fp}")
                 # Confirmed update
                 # Delete old knowledge if exists
-                if db_info['knowledge_id']:
-                    delete_knowledge_api(db_info['knowledge_id'])
+                if db_doc.knowledge_id:
+                    delete_knowledge_api(db_doc.knowledge_id)
                 
-                cursor.execute('''
-                    UPDATE document_status_table 
-                    SET file_status = 'discover', created_at = ?, last_modified_time = ?, file_size = ?, file_hash = NULL, knowledge_id = NULL
-                    WHERE filepath = ?
-                ''', (datetime.now(), curr_info['mtime'], curr_info['size'], fp))
+                db_doc.file_status = 'discover'
+                db_doc.created_at = datetime.now()
+                db_doc.last_modified_time = curr_info['mtime']
+                db_doc.file_size = curr_info['size']
+                db_doc.file_hash = None
+                db_doc.knowledge_id = None
+                
                 update_count += 1
 
         # 3.3 Deletions (Files in DB but not on disk)
@@ -229,23 +182,21 @@ def main():
         logging.info(f"Found {len(deleted_filepaths)} deleted files.")
         
         for fp in deleted_filepaths:
-            db_info = db_files[fp]
+            db_doc = db_files[fp]
             
             logging.info(f"Marking as deleted: {fp}")
-            if db_info['knowledge_id']:
-                 delete_knowledge_api(db_info['knowledge_id'])
+            if db_doc.knowledge_id:
+                 delete_knowledge_api(db_doc.knowledge_id)
             
-            cursor.execute('''
-                UPDATE document_status_table
-                SET file_status = 'deleted', finish_at = ?
-                WHERE filepath = ?
-            ''', (datetime.now(), fp))
+            db_doc.file_status = 'deleted'
+            db_doc.finish_at = datetime.now()
+            
             delete_count += 1
             
-        conn.commit()
-        conn.close()
+        session.commit()
         
     except Exception as e:
+        session.rollback()
         status = "fail"
         failed_reason = str(e)
         logging.exception("Script execution failed")
@@ -255,13 +206,20 @@ def main():
         
         # Record execution stats
         try:
-            conn = get_db_connection()
-            conn.execute('''
-                INSERT INTO script_process_record (script_name, process_duration, process_count, insert_count, update_count, delete_count, process_timestamp, status, failed_reason)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ('discover_files.py', duration, insert_count + update_count + delete_count, insert_count, update_count, delete_count, datetime.now(), status, failed_reason))
-            conn.commit()
-            conn.close()
+            stat_record = ScriptProcessRecord(
+                script_name='discover_files.py',
+                process_duration=duration,
+                process_count=insert_count + update_count + delete_count,
+                insert_count=insert_count,
+                update_count=update_count,
+                delete_count=delete_count,
+                process_timestamp=datetime.now(),
+                status=status,
+                failed_reason=failed_reason
+            )
+            session.add(stat_record)
+            session.commit()
+            session.close()
         except Exception as e:
             logging.error(f"Failed to record script stats: {e}")
 

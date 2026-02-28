@@ -1,12 +1,13 @@
 import os
-import sqlite3
 import requests
 import time
 import logging
 from datetime import datetime
 
+# Import ORM models
+from database import DocumentStatus, ScriptProcessRecord, get_session
+
 # Configuration
-DB_PATH = 'weknora_bridge.db'
 API_BASE_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID')
 BATCH_SIZE = 50
@@ -20,14 +21,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-
-def get_db_connection():
-    """Create a database connection with WAL mode enabled."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    # Enable Write-Ahead Logging for concurrency
-    conn.execute('PRAGMA journal_mode=WAL;')
-    return conn
 
 def submit_file_to_rag(filepath: str, filename: str) -> dict:
     """Submit file to RAG system and return API response data."""
@@ -69,63 +62,50 @@ def main():
     start_time = time.time()
     success_count = 0
     fail_count = 0
+    status = "success"
+    failed_reason = ""
     
     logging.info("Starting submit task...")
     
+    session = get_session()
+    
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
         # 1. Fetch 'discover' tasks
-        cursor.execute("SELECT id, filename, filepath FROM document_status_table WHERE file_status = 'discover' LIMIT ?", (BATCH_SIZE,))
-        tasks = cursor.fetchall()
+        tasks = session.query(DocumentStatus).filter(DocumentStatus.file_status == 'discover').limit(BATCH_SIZE).all()
         
         if not tasks:
             logging.info("No tasks to process.")
-            conn.close()
+            session.close()
             return
             
         logging.info(f"Processing {len(tasks)} tasks...")
         
         for task in tasks:
-            task_id = task['id']
-            filepath = task['filepath']
-            filename = task['filename']
+            logging.info(f"Submitting: {task.filename}")
             
-            logging.info(f"Submitting: {filename}")
-            
-            api_data = submit_file_to_rag(filepath, filename)
+            api_data = submit_file_to_rag(task.filepath, task.filename)
             
             if api_data:
                 # Success
-                knowledge_id = api_data.get('id')
-                # Use the status returned by API (e.g., 'processing' or 'pending')
-                new_status = api_data.get('parse_status', 'processing')
-                file_hash = api_data.get('file_hash')
-                
-                cursor.execute('''
-                    UPDATE document_status_table 
-                    SET file_status = ?, knowledge_id = ?, file_hash = ?, process_at = ?, failed_msg = NULL
-                    WHERE id = ?
-                ''', (new_status, knowledge_id, file_hash, datetime.now(), task_id))
+                task.knowledge_id = api_data.get('id')
+                task.file_status = api_data.get('parse_status', 'processing')
+                task.file_hash = api_data.get('file_hash')
+                task.process_at = datetime.now()
+                task.failed_msg = None
                 success_count += 1
             else:
                 # Failed
-                cursor.execute('''
-                    UPDATE document_status_table 
-                    SET file_status = 'failed', failed_msg = 'API submission failed', process_at = ?
-                    WHERE id = ?
-                ''', (datetime.now(), task_id))
+                task.file_status = 'failed'
+                task.failed_msg = 'API submission failed'
+                task.process_at = datetime.now()
                 fail_count += 1
                 
-            # Commit after each task or small batch to release locks quickly? 
-            # Given WAL mode, batch commit is fine, but for safety against script crash, per-task commit is okay too.
-            # Let's commit every loop to ensure progress is saved.
-            conn.commit()
+            session.commit()
             
-        conn.close()
-        
     except Exception as e:
+        session.rollback()
+        status = "fail"
+        failed_reason = str(e)
         logging.exception("Script execution failed")
     finally:
         duration = time.time() - start_time
@@ -133,13 +113,20 @@ def main():
         
         # Record stats
         try:
-            conn = get_db_connection()
-            conn.execute('''
-                INSERT INTO script_process_record (script_name, process_duration, process_count, insert_count, update_count, delete_count, process_timestamp, status, failed_reason)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ('submit_task.py', duration, success_count + fail_count, 0, success_count, 0, datetime.now(), 'success', ''))
-            conn.commit()
-            conn.close()
+            stat_record = ScriptProcessRecord(
+                script_name='submit_task.py',
+                process_duration=duration,
+                process_count=success_count + fail_count,
+                insert_count=0,
+                update_count=success_count, # Consistent with original behavior
+                delete_count=0,
+                process_timestamp=datetime.now(),
+                status=status,
+                failed_reason=failed_reason
+            )
+            session.add(stat_record)
+            session.commit()
+            session.close()
         except Exception as e:
             logging.error(f"Failed to record script stats: {e}")
 

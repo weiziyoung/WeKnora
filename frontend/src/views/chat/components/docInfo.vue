@@ -26,11 +26,11 @@
                 <!-- Regular knowledge references: show title with popup -->
                 <template v-else>
                     <t-popup overlayClassName="refer-to-layer" placement="bottom-left" width="400" :showArrow="false"
-                        trigger="click">
+                        trigger="hover">
                         <template #content>
-                            <ContentPopup :content="safeProcessContent(item.content)" :is-html="true" />
+                            <ContentPopup :content="renderMarkdown(item.content)" :is-html="true" />
                         </template>
-                        <span class="doc">
+                        <span class="doc" @click="handleDocClick(item)">
                             {{ session.knowledge_references.length < 2 ? item.knowledge_title : `${index +
                                 1}.${item.knowledge_title}` }} </span>
                     </t-popup>
@@ -43,6 +43,17 @@
 import { onMounted, defineProps, computed, ref, reactive } from "vue";
 import { sanitizeHTML } from '@/utils/security';
 import ContentPopup from './tool-results/ContentPopup.vue';
+import { marked } from 'marked';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { downKnowledgeDetails } from '@/api/knowledge-base';
+
+// Configure marked
+marked.use({
+    mangle: false,
+    headerIds: false,
+    breaks: true,
+});
+
 const props = defineProps({
     // 必填项
     content: {
@@ -57,6 +68,78 @@ const props = defineProps({
 const showReferBox = ref(false);
 const referBoxSwitch = () => {
     showReferBox.value = !showReferBox.value;
+};
+
+// 渲染 Markdown 内容
+const renderMarkdown = (content) => {
+    if (!content) return '';
+    try {
+        const html = marked.parse(content);
+        return sanitizeHTML(html);
+    } catch (e) {
+        console.error('Markdown rendering failed:', e);
+        return sanitizeHTML(content);
+    }
+};
+
+// 点击文档标题跳转到原始文件
+const handleDocClick = async (item) => {
+    if (!item.knowledge_id) {
+        MessagePlugin.warning('无法找到对应的文件ID');
+        return;
+    }
+
+    try {
+        const loading = MessagePlugin.loading('正在打开文件...');
+        const response = await downKnowledgeDetails(item.knowledge_id);
+        
+        // Check if response is Blob
+        if (response instanceof Blob) {
+            let blob = response;
+            // Try to detect MIME type from filename for better preview support
+            const filename = item.knowledge_title || '';
+            const ext = filename.split('.').pop().toLowerCase();
+            const mimeMap = {
+                'pdf': 'application/pdf',
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'txt': 'text/plain',
+                'html': 'text/html',
+                'htm': 'text/html',
+                'json': 'application/json',
+                'md': 'text/markdown',
+                'svg': 'image/svg+xml'
+            };
+            const mimeType = mimeMap[ext];
+            if (mimeType) {
+                blob = new Blob([response], { type: mimeType });
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            // Clean up URL object after a delay
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+            }, 1000);
+        } else {
+            // Handle error response (sometimes error is returned as JSON but axios treats as blob)
+             // Check if it's a JSON blob
+            if (response.type === 'application/json') {
+                const text = await response.text();
+                const json = JSON.parse(text);
+                throw new Error(json.message || '文件打开失败');
+            }
+             // Should be unreachable if interceptor handles it, but safety first
+             throw new Error('文件打开失败');
+        }
+        loading.close();
+    } catch (error) {
+        console.error('Failed to open file:', error);
+        MessagePlugin.closeAll();
+        MessagePlugin.error(error.message || '文件打开失败');
+    }
 };
 
 // 安全地处理内容

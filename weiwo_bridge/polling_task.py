@@ -1,12 +1,13 @@
 import os
-import sqlite3
 import requests
 import time
 import logging
 from datetime import datetime
 
+# Import ORM models
+from database import DocumentStatus, ScriptProcessRecord, get_session
+
 # Configuration
-DB_PATH = 'weknora_bridge.db'
 API_BASE_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
 BATCH_SIZE = 50
 POLL_INTERVAL = 0.2  # Sleep 200ms between requests to avoid overwhelming the API
@@ -20,14 +21,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-
-def get_db_connection():
-    """Create a database connection with WAL mode enabled."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    # Enable Write-Ahead Logging for concurrency
-    conn.execute('PRAGMA journal_mode=WAL;')
-    return conn
 
 def check_knowledge_status(knowledge_id: str) -> dict:
     """Query RAG system for knowledge status."""
@@ -58,52 +51,46 @@ def main():
     start_time = time.time()
     processed_count = 0
     status_changed_count = 0
+    status = "success"
+    failed_reason = ""
     
     logging.info("Starting polling task...")
     
+    session = get_session()
+    
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
         # 1. Fetch tasks that are pending or processing
-        cursor.execute('''
-            SELECT id, filename, knowledge_id, file_status 
-            FROM document_status_table 
-            WHERE file_status IN ('pending', 'processing') 
-              AND knowledge_id IS NOT NULL 
-            LIMIT ?
-        ''', (BATCH_SIZE,))
-        tasks = cursor.fetchall()
+        tasks = session.query(DocumentStatus).filter(
+            DocumentStatus.file_status.in_(['pending', 'processing']),
+            DocumentStatus.knowledge_id.isnot(None)
+        ).limit(BATCH_SIZE).all()
         
         if not tasks:
             logging.info("No active tasks to poll.")
-            conn.close()
+            session.close()
             return
             
         logging.info(f"Polling {len(tasks)} tasks...")
         
         for task in tasks:
-            task_id = task['id']
-            knowledge_id = task['knowledge_id']
-            current_status = task['file_status']
+            current_status = task.file_status
             
             # Rate limiting
             time.sleep(POLL_INTERVAL)
             
-            api_data = check_knowledge_status(knowledge_id)
+            api_data = check_knowledge_status(task.knowledge_id)
             
             if api_data:
                 remote_status = api_data.get('parse_status')
                 
                 # Handle 404/Not Found
                 if remote_status == 'not_found':
-                    logging.info(f"Knowledge {knowledge_id} missing, marking as failed.")
-                    cursor.execute('''
-                        UPDATE document_status_table 
-                        SET file_status = 'failed', finish_at = ?, failed_msg = 'Knowledge ID not found in RAG system'
-                        WHERE id = ?
-                    ''', (datetime.now(), task_id))
+                    logging.info(f"Knowledge {task.knowledge_id} missing, marking as failed.")
+                    task.file_status = 'failed'
+                    task.finish_at = datetime.now()
+                    task.failed_msg = 'Knowledge ID not found in RAG system'
                     status_changed_count += 1
+                    session.commit()
                     continue
 
                 if not remote_status:
@@ -113,38 +100,31 @@ def main():
                 remote_status = remote_status.lower()
                 
                 if remote_status != current_status:
-                    logging.info(f"Status changed for {task['filename']}: {current_status} -> {remote_status}")
+                    logging.info(f"Status changed for {task.filename}: {current_status} -> {remote_status}")
                     
                     if remote_status == 'completed':
-                        cursor.execute('''
-                            UPDATE document_status_table 
-                            SET file_status = 'completed', finish_at = ?, failed_msg = NULL
-                            WHERE id = ?
-                        ''', (datetime.now(), task_id))
+                        task.file_status = 'completed'
+                        task.finish_at = datetime.now()
+                        task.failed_msg = None
                     elif remote_status == 'failed':
                         error_msg = api_data.get('error_message', 'Unknown error')
-                        cursor.execute('''
-                            UPDATE document_status_table 
-                            SET file_status = 'failed', finish_at = ?, failed_msg = ?
-                            WHERE id = ?
-                        ''', (datetime.now(), error_msg, task_id))
+                        task.file_status = 'failed'
+                        task.finish_at = datetime.now()
+                        task.failed_msg = error_msg
                     else:
                         # Update intermediate status (e.g. pending -> processing)
-                        cursor.execute('''
-                            UPDATE document_status_table 
-                            SET file_status = ?
-                            WHERE id = ?
-                        ''', (remote_status, task_id))
+                        task.file_status = remote_status
                     
                     status_changed_count += 1
             
             processed_count += 1
-            # Commit periodically
-            conn.commit()
+            # Commit periodically (or per task as here)
+            session.commit()
             
-        conn.close()
-        
     except Exception as e:
+        session.rollback()
+        status = "fail"
+        failed_reason = str(e)
         logging.exception("Script execution failed")
     finally:
         duration = time.time() - start_time
@@ -152,13 +132,20 @@ def main():
         
         # Record stats
         try:
-            conn = get_db_connection()
-            conn.execute('''
-                INSERT INTO script_process_record (script_name, process_duration, process_count, insert_count, update_count, delete_count, process_timestamp, status, failed_reason)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', ('polling_task.py', duration, processed_count, 0, status_changed_count, 0, datetime.now(), 'success', ''))
-            conn.commit()
-            conn.close()
+            stat_record = ScriptProcessRecord(
+                script_name='polling_task.py',
+                process_duration=duration,
+                process_count=processed_count,
+                insert_count=0,
+                update_count=status_changed_count,
+                delete_count=0,
+                process_timestamp=datetime.now(),
+                status=status,
+                failed_reason=failed_reason
+            )
+            session.add(stat_record)
+            session.commit()
+            session.close()
         except Exception as e:
             logging.error(f"Failed to record script stats: {e}")
 
