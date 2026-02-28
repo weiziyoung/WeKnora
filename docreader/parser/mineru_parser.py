@@ -11,10 +11,7 @@ from io import BytesIO
 import markdownify
 import requests
 
-try:
-    import alibabacloud_oss_v2 as oss
-except ImportError:
-    oss = None
+import alibabacloud_oss_v2 as oss
 
 from docreader.config import CONFIG
 from docreader.models.document import Document
@@ -327,8 +324,8 @@ class AliyunOSSHelper:
         self.client = oss.Client(self.cfg)
         self.bucket = CONFIG.oss_bucket
 
-    def upload_bytes(self, content: bytes, file_ext: str = ".pdf") -> Optional[str]:
-        """Uploads bytes to OSS and returns public URL"""
+    def upload_bytes(self, content: bytes, file_ext: str = ".pdf") -> Optional[Tuple[str, str]]:
+        """Uploads bytes to OSS and returns (public URL, object key)"""
         if not self.bucket or not self.cfg.region:
             logger.warning("OSS configuration missing (bucket or region)")
             return None
@@ -355,11 +352,32 @@ class AliyunOSSHelper:
             endpoint = endpoint.replace("http://", "").replace("https://", "")
             
             url = f"https://{self.bucket}.{endpoint}/{filename}"
-            return url
+            return url, filename
             
         except Exception as e:
             logger.error(f"OSS Upload Error: {e}", exc_info=True)
             return None
+
+    def delete_object(self, object_key: str) -> bool:
+        """Delete object from OSS"""
+        if not self.bucket or not self.cfg.region:
+            return False
+        
+        try:
+            logger.info(f"Deleting temporary file from OSS: {object_key}...")
+            request = oss.DeleteObjectRequest(
+                bucket=self.bucket,
+                key=object_key
+            )
+            result = self.client.delete_object(request)
+            
+            if result.status_code != 204 and result.status_code != 200:
+                logger.warning(f"OSS Delete failed with status {result.status_code}")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"OSS Delete Error: {e}", exc_info=True)
+            return False
 
 
 class MinerUAPIParser(StdMinerUParser):
@@ -393,6 +411,9 @@ class MinerUAPIParser(StdMinerUParser):
             logger.warning("MinerU API token is missing")
             return Document()
 
+        oss_helper = None
+        oss_object_key = None
+
         try:
             # --- Step 1: Upload file to storage to get URL ---
             # We assume the content is PDF by default as per typical usage,
@@ -404,7 +425,9 @@ class MinerUAPIParser(StdMinerUParser):
             if CONFIG.oss_access_key and CONFIG.oss_bucket:
                 try:
                     oss_helper = AliyunOSSHelper()
-                    file_url = oss_helper.upload_bytes(content, file_ext=".pdf")
+                    upload_result = oss_helper.upload_bytes(content, file_ext=".pdf")
+                    if upload_result:
+                        file_url, oss_object_key = upload_result
                 except Exception as e:
                     logger.warning(f"Failed to initialize or use OSS Helper: {e}")
             
@@ -588,6 +611,12 @@ class MinerUAPIParser(StdMinerUParser):
         except Exception as e:
             logger.error(f"MinerU API parsing failed: {e}", exc_info=True)
             return Document()
+        finally:
+            if oss_helper and oss_object_key:
+                try:
+                    oss_helper.delete_object(oss_object_key)
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup OSS object {oss_object_key}: {e}")
 
 
 class MinerUParser(PipelineParser):
