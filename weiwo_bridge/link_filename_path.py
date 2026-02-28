@@ -112,7 +112,13 @@ def process_database_folder(session: Session, db_folder_path: str):
             continue
         
         try:
-            ord_val = parts[0].strip()
+            ord_val_str = parts[0].strip()
+            try:
+                ord_val = int(ord_val_str)
+            except ValueError:
+                logging.warning(f"Invalid contract_ord value: {ord_val_str}, skipping line.")
+                continue
+
             title = parts[1].strip()
             # Content is everything after the second tab
             content = "\t".join(parts[2:]).strip()
@@ -136,7 +142,7 @@ def process_database_folder(session: Session, db_folder_path: str):
             
     logging.info(f"Finished {contract_file}. Updated: {update_count}, Skipped/NoChange: {skip_count}")
 
-def update_db_record(session: Session, file_info: dict, title: str, ord_val: str) -> bool:
+def update_db_record(session: Session, file_info: dict, title: str, ord_val: int) -> bool:
     """
     Update the database record if a matching file is found.
     Returns True if updated, False otherwise.

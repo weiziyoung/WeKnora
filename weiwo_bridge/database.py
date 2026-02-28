@@ -15,22 +15,22 @@ class DocumentStatus(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     filename = Column(String, nullable=False, index=True, comment='文件名')  # 文件名
     filepath = Column(String, nullable=False, unique=True, index=True, comment='物理路径')  # 物理路径
-    file_status = Column(String, default='discover')
-    created_at = Column(DateTime)
-    last_modified_time = Column(Float)
+    file_status = Column(String, default='discover', index=True)
+    created_at = Column(DateTime, index=True)
+    last_modified_time = Column(Float, index=True)
     process_at = Column(DateTime)
     finish_at = Column(DateTime)
     failed_msg = Column(Text)
     file_size = Column(Integer)
     file_hash = Column(String, index=True)
     file_store_path = Column(String)
-    knowledge_id = Column(String)
-    database_name = Column(String, comment='智邦数据库库名') # 智邦数据库来源
+    knowledge_id = Column(String, index=True)
+    database_name = Column(String, comment='智邦数据库库名',index=True) # 智邦数据库来源
 
     # New fields
-    contract_title = Column(String, comment='合同标题')  # 合同标题
-    contract_ord = Column(String, comment='合同序号')    # 合同序号
-    zb_link = Column(String, comment='智邦系统链接',index=True)     # 智邦系统链接
+    contract_title = Column(String, comment='合同标题', index=True)  # 合同标题
+    contract_ord = Column(Integer, comment='合同序号', index=True)    # 合同序号
+    zb_link = Column(Integer, comment='智邦系统链接',index=True)     # 智邦系统链接
 
 class ScriptProcessRecord(Base):
     __tablename__ = 'script_process_record'
