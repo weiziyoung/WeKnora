@@ -9,6 +9,7 @@ from database import DocumentStatus, ScriptProcessRecord, get_session
 
 # Configuration
 API_BASE_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
+API_KEY = 'sk-06OSFVXX3uEPKxgxx4YhGbx-VCjujpAAC8MpxMxJL-wv4CbQ'
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID')
 BATCH_SIZE = 50
 
@@ -37,7 +38,7 @@ def submit_file_to_rag(filepath: str, filename: str) -> dict:
                 'enable_multimodel': 'false' 
             }
             
-            response = requests.post(url, files=files, data=data, timeout=60)
+            response = requests.post(url, files=files, data=data, timeout=60, headers={'X-API-Key': API_KEY})
             
             if response.status_code == 200:
                 result = response.json()

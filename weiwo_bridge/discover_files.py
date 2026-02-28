@@ -10,6 +10,7 @@ from database import DocumentStatus, ScriptProcessRecord, init_db, get_session
 
 # Configuration
 API_BASE_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
+API_KEY = 'sk-06OSFVXX3uEPKxgxx4YhGbx-VCjujpAAC8MpxMxJL-wv4CbQ'
 
 # Directory Configuration
 SEARCH_PREFIX = r'D:\Zbintel'
@@ -50,7 +51,7 @@ def delete_knowledge_api(knowledge_id: str) -> bool:
     
     url = f"{API_BASE_URL}/api/v1/knowledge/{knowledge_id}"
     try:
-        response = requests.delete(url)
+        response = requests.delete(url, headers={'X-API-Key': API_KEY})
         if response.status_code == 200:
             logging.info(f"Successfully deleted knowledge {knowledge_id}")
             return True

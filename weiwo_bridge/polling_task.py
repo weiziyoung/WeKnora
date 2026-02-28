@@ -9,6 +9,7 @@ from database import DocumentStatus, ScriptProcessRecord, get_session
 
 # Configuration
 API_BASE_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
+API_KEY = 'sk-06OSFVXX3uEPKxgxx4YhGbx-VCjujpAAC8MpxMxJL-wv4CbQ'
 BATCH_SIZE = 50
 POLL_INTERVAL = 0.2  # Sleep 200ms between requests to avoid overwhelming the API
 
@@ -26,7 +27,7 @@ def check_knowledge_status(knowledge_id: str) -> dict:
     """Query RAG system for knowledge status."""
     url = f"{API_BASE_URL}/api/v1/knowledge/{knowledge_id}"
     try:
-        response = requests.get(url, timeout=30)
+        response = requests.get(url, timeout=30, headers={'X-API-Key': API_KEY})
         
         if response.status_code == 200:
             result = response.json()
