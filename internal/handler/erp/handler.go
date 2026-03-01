@@ -20,6 +20,7 @@ func initDB() {
 	// or ../weiwo_bridge/weknora_bridge.db if running from bin
 
 	paths := []string{
+		"/app/weiwo_bridge/weknora_bridge.db", // Docker container path
 		"./weiwo_bridge/weknora_bridge.db",
 		"../weiwo_bridge/weknora_bridge.db",
 		"/Users/young/Documents/codehub/WeiWo/WeKnora/weiwo_bridge/weknora_bridge.db", // Fallback to absolute path
