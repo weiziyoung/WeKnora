@@ -8,9 +8,9 @@ services:
     container_name: WeKnora-frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
-    volumes:
-      - ./frontend/nginx.conf:/etc/nginx/templates/default.conf.template
-      - ./frontend:/app
+    # volumes:
+    #   - ./frontend/nginx.conf:/etc/nginx/templates/default.conf.template
+    #   - ./frontend:/app
     environment:
       - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-50}
       - APP_HOST=${APP_HOST:-app}
@@ -177,8 +177,8 @@ services:
   postgres:
     image: paradedb/paradedb:v0.21.4-pg17
     container_name: WeKnora-postgres
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    # ports:
+    #   - "${DB_PORT:-5432}:5432"
     environment:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
