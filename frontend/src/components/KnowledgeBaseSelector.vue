@@ -198,14 +198,15 @@ const updateDropdownPosition = () => {
   let rect: DOMRect | null = null
   try {
     if (typeof anchor.getBoundingClientRect === 'function') {
-      rect = anchor.getBoundingClientRect()
+      const localRect = anchor.getBoundingClientRect()
+      rect = localRect
       console.log('[KB Selector] Button rect:', {
-        top: rect.top,
-        bottom: rect.bottom,
-        left: rect.left,
-        right: rect.right,
-        width: rect.width,
-        height: rect.height
+        top: localRect.top,
+        bottom: localRect.bottom,
+        left: localRect.left,
+        right: localRect.right,
+        width: localRect.width,
+        height: localRect.height
       })
     } else if (anchor.width !== undefined && anchor.left !== undefined) {
       // 已经是 DOMRect

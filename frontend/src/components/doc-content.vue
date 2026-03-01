@@ -19,9 +19,9 @@ marked.use({
 });
 const renderer = new marked.Renderer();
 let page = 1;
-let doc = null;
+let doc: HTMLElement | null = null;
 let down = ref()
-let mdContentWrap = ref()
+let mdContentWrap = ref<HTMLElement | null>(null)
 let url = ref('')
 // 视图模式：chunks / original / merged
 const viewMode = ref<'chunks' | 'original' | 'merged'>('merged');
@@ -98,17 +98,22 @@ const mergeChunks = (chunks: any[]): string => {
 
 onMounted(() => {
   nextTick(() => {
-    doc = document.getElementsByClassName('t-drawer__body')[0]
-    doc.addEventListener('scroll', handleDetailsScroll);
+    const drawerBody = document.getElementsByClassName('t-drawer__body')[0] as HTMLElement | undefined
+    if (drawerBody) {
+      doc = drawerBody
+      doc.addEventListener('scroll', handleDetailsScroll);
+    }
   })
 })
 onUpdated(() => {
   page = 1
 })
 onUnmounted(() => {
-  doc.removeEventListener('scroll', handleDetailsScroll);
+  if (doc) {
+    doc.removeEventListener('scroll', handleDetailsScroll);
+  }
 })
-const checkImage = (url) => {
+const checkImage = (url: string) => {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve(true);
@@ -116,14 +121,30 @@ const checkImage = (url) => {
     img.src = url;
   });
 };
+
+const processImageUrl = (url: string) => {
+  if (!url) return '';
+  if (typeof window === 'undefined') return url;
+
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
+      urlObj.hostname = window.location.hostname;
+    }
+    return urlObj.toString();
+  } catch (e) {
+    return url;
+  }
+};
+
 renderer.image = function (href, title, text) {
-  // 安全地处理图片链接
-  if (!isValidImageURL(href)) {
+  if (!href || !isValidImageURL(href)) {
     return `<p>${t('error.invalidImageLink')}</p>`;
   }
   
-  // 使用安全的图片创建函数
-  const safeImage = createSafeImage(href, text || '', title || '');
+  const processedHref = processImageUrl(href);
+
+  const safeImage = createSafeImage(processedHref, text || '', title || '');
   return `<figure>
                 ${safeImage}
                 <figcaption style="text-align: left;">${text || ''}</figcaption>
@@ -188,8 +209,8 @@ const loadOriginalContent = async () => {
   }
   loadingOriginal.value = true;
   try {
-    const blob = await downKnowledgeDetails(props.details.id);
-    const text = await blob.text();
+    const response = await downKnowledgeDetails(props.details.id);
+    const text = await response.data.text();
     originalContent.value = text;
   } catch (error: any) {
     console.error('Failed to load original content:', error);
@@ -200,12 +221,13 @@ const loadOriginalContent = async () => {
 };
 watch(() => props.details.md, (newVal) => {
   nextTick(async () => {
-    const images = mdContentWrap.value.querySelectorAll('img.markdown-image');
+    const images = mdContentWrap.value?.querySelectorAll('img.markdown-image');
     if (images) {
-      images.forEach(async item => {
-        const isValid = await checkImage(item.src);
+      images.forEach(async (item) => {
+        const imageElement = item as HTMLImageElement;
+        const isValid = await checkImage(imageElement.src);
         if (!isValid) {
-          item.remove();
+          imageElement.remove();
         }
       })
     }
@@ -213,7 +235,7 @@ watch(() => props.details.md, (newVal) => {
 }, { immediate: true, deep: true })
 
 // 安全地处理 Markdown 内容（使用 marked）
-const processMarkdown = (markdownText) => {
+const processMarkdown = (markdownText: string) => {
   if (!markdownText || typeof markdownText !== 'string') return '';
 
   // 先还原原始文本中的 HTML 实体，让它们作为普通字符参与渲染
@@ -250,7 +272,9 @@ const processMarkdown = (markdownText) => {
 };
 const handleClose = () => {
   emit("closeDoc", false);
-  doc.scrollTop = 0;
+  if (doc) {
+    doc.scrollTop = 0;
+  }
   viewMode.value = 'merged';
   originalContent.value = '';
 };
@@ -322,8 +346,11 @@ const getTimeLabel = () => {
 };
 
 // 获取Chunk样式类
-const getChunkClass = (index: number) => {
-  return index % 2 !== 0 ? 'chunk-odd' : 'chunk-even';
+const normalizeIndex = (index: number | string) => Number(index);
+
+const getChunkClass = (index: number | string) => {
+  const normalizedIndex = normalizeIndex(index);
+  return normalizedIndex % 2 !== 0 ? 'chunk-odd' : 'chunk-even';
 };
 
 // 获取Chunk元数据
@@ -367,24 +394,35 @@ const getGeneratedQuestions = (item: any): GeneratedQuestion[] => {
 // 展开状态管理
 const expandedChunks = ref<Set<number>>(new Set());
 
-const toggleQuestions = (index: number) => {
-  if (expandedChunks.value.has(index)) {
-    expandedChunks.value.delete(index);
+const toggleQuestions = (index: number | string) => {
+  const normalizedIndex = normalizeIndex(index);
+  if (Number.isNaN(normalizedIndex)) return;
+  if (expandedChunks.value.has(normalizedIndex)) {
+    expandedChunks.value.delete(normalizedIndex);
   } else {
-    expandedChunks.value.add(index);
+    expandedChunks.value.add(normalizedIndex);
   }
-  // 触发响应式更新
   expandedChunks.value = new Set(expandedChunks.value);
 };
 
-const isExpanded = (index: number) => expandedChunks.value.has(index);
+const isExpanded = (index: number | string) => {
+  const normalizedIndex = normalizeIndex(index);
+  if (Number.isNaN(normalizedIndex)) return false;
+  return expandedChunks.value.has(normalizedIndex);
+};
 
 // 删除中的状态
 const deletingQuestion = ref<{ chunkIndex: number; questionId: string } | null>(null);
 
 // 删除生成的问题
-const handleDeleteQuestion = async (item: any, chunkIndex: number, question: GeneratedQuestion) => {
+const handleDeleteQuestion = async (item: any, chunkIndex: number | string, question: GeneratedQuestion) => {
   if (!item || !item.id) {
+    MessagePlugin.error(t('common.error') || '操作失败');
+    return;
+  }
+
+  const normalizedIndex = normalizeIndex(chunkIndex);
+  if (Number.isNaN(normalizedIndex)) {
     MessagePlugin.error(t('common.error') || '操作失败');
     return;
   }
@@ -402,7 +440,7 @@ const handleDeleteQuestion = async (item: any, chunkIndex: number, question: Gen
     cancelBtn: t('common.cancel') || '取消',
     onConfirm: async () => {
       confirmDialog.hide();
-      deletingQuestion.value = { chunkIndex, questionId: question.id };
+      deletingQuestion.value = { chunkIndex: normalizedIndex, questionId: question.id };
       try {
         await deleteGeneratedQuestion(item.id, question.id);
         MessagePlugin.success(t('common.deleteSuccess') || '删除成功');
@@ -431,19 +469,21 @@ const handleDeleteQuestion = async (item: any, chunkIndex: number, question: Gen
   });
 };
 
-// 检查是否正在删除某个问题
-const isDeleting = (chunkIndex: number, questionId: string) => {
-  return deletingQuestion.value?.chunkIndex === chunkIndex && deletingQuestion.value?.questionId === questionId;
+const isDeleting = (chunkIndex: number | string, questionId: string) => {
+  const normalizedIndex = normalizeIndex(chunkIndex);
+  if (Number.isNaN(normalizedIndex)) return false;
+  return deletingQuestion.value?.chunkIndex === normalizedIndex && deletingQuestion.value?.questionId === questionId;
 };
 
 const downloadFile = () => {
   downKnowledgeDetails(props.details.id)
     .then((result) => {
-      if (result) {
+      const blob = result?.data;
+      if (blob) {
         if (url.value) {
           URL.revokeObjectURL(url.value);
         }
-        url.value = URL.createObjectURL(result);
+        url.value = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.style.display = "none";
         link.setAttribute("href", url.value);
@@ -567,7 +607,7 @@ const handleDetailsScroll = () => {
             :class="getChunkClass(index)"
           >
             <div class="chunk-header">
-              <span class="chunk-index">{{ $t('knowledgeBase.segment') || '片段' }} {{ index + 1 }}</span>
+              <span class="chunk-index">{{ $t('knowledgeBase.segment') || '片段' }} {{ Number(index) + 1 }}</span>
               <div class="chunk-header-right">
                 <t-tag 
                   v-if="getGeneratedQuestions(item).length > 0" 
