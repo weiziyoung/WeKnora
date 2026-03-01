@@ -10,7 +10,7 @@ from database import DocumentStatus, ScriptProcessRecord, get_session
 # Configuration
 API_BASE_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
 API_KEY = 'sk-06OSFVXX3uEPKxgxx4YhGbx-VCjujpAAC8MpxMxJL-wv4CbQ'
-KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID')
+KNOWLEDGE_BASE_ID = "1ec5a506-966f-4165-afd9-cdc3d8442775"
 BATCH_SIZE = 50
 
 # Setup Logging
