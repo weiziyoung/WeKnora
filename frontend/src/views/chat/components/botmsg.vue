@@ -53,6 +53,7 @@ import deepThink from './deepThink.vue';
 import AgentStreamDisplay from './AgentStreamDisplay.vue';
 import picturePreview from '@/components/picture-preview.vue';
 import { sanitizeHTML, safeMarkdownToHTML, createSafeImage, isValidImageURL } from '@/utils/security';
+import { processContentUrls } from '@/utils/url';
 import { useI18n } from 'vue-i18n';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useUIStore } from '@/stores/ui';
@@ -121,9 +122,12 @@ const markdownTokens = computed(() => {
     if (!text || typeof text !== 'string') {
         return [];
     }
+
+    // Process URLs first
+    const processedText = processContentUrls(text);
     
     // 首先对 Markdown 内容进行安全处理
-    const safeMarkdown = safeMarkdownToHTML(text);
+    const safeMarkdown = safeMarkdownToHTML(processedText);
     
     // 使用 marked.lexer 分词
     return marked.lexer(safeMarkdown);

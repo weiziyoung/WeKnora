@@ -7,7 +7,7 @@ import { onMounted, ref, nextTick, onUnmounted, onUpdated, watch } from "vue";
 import { downKnowledgeDetails, deleteGeneratedQuestion } from "@/api/knowledge-base/index";
 import { MessagePlugin, DialogPlugin } from "tdesign-vue-next";
 import { sanitizeHTML, safeMarkdownToHTML, createSafeImage, isValidImageURL } from '@/utils/security';
-import { processUrl } from '@/utils/url';
+import { processUrl, processContentUrls } from '@/utils/url';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
@@ -224,8 +224,11 @@ watch(() => props.details.md, (newVal) => {
 const processMarkdown = (markdownText: string) => {
   if (!markdownText || typeof markdownText !== 'string') return '';
 
+  // Process URLs first
+  const urlProcessed = processContentUrls(markdownText);
+
   // 先还原原始文本中的 HTML 实体，让它们作为普通字符参与渲染
-  let processedText = markdownText
+  let processedText = urlProcessed
     .replace(/&#39;/g, "'")
     .replace(/&#x27;/gi, "'")
     .replace(/&apos;/g, "'")
@@ -471,7 +474,7 @@ const isDeleting = (chunkIndex: number | string, questionId: string) => {
 const downloadFile = () => {
   downKnowledgeDetails(props.details.id)
     .then((result) => {
-      const blob = result?.data;
+      const blob = result as unknown as Blob;
       if (blob) {
         if (url.value) {
           URL.revokeObjectURL(url.value);
@@ -481,6 +484,7 @@ const downloadFile = () => {
         link.style.display = "none";
         link.setAttribute("href", url.value);
         link.setAttribute("download", props.details.title);
+        document.body.appendChild(link);
         link.click();
         nextTick(() => {
           document.body.removeChild(link);

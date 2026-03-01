@@ -42,6 +42,7 @@
 <script setup>
 import { onMounted, defineProps, computed, ref, reactive } from "vue";
 import { sanitizeHTML } from '@/utils/security';
+import { processContentUrls } from '@/utils/url';
 import ContentPopup from './tool-results/ContentPopup.vue';
 import { marked } from 'marked';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -73,12 +74,15 @@ const referBoxSwitch = () => {
 // 渲染 Markdown 内容
 const renderMarkdown = (content) => {
     if (!content) return '';
+    
+    const processedContent = processContentUrls(content);
+    
     try {
-        const html = marked.parse(content);
+        const html = marked.parse(processedContent);
         return sanitizeHTML(html);
     } catch (e) {
         console.error('Markdown rendering failed:', e);
-        return sanitizeHTML(content);
+        return sanitizeHTML(processedContent);
     }
 };
 

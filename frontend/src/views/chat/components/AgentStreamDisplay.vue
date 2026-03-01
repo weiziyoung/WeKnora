@@ -222,6 +222,7 @@ import DOMPurify from 'dompurify';
 import ToolResultRenderer from './ToolResultRenderer.vue';
 import picturePreview from '@/components/picture-preview.vue';
 import { getChunkByIdOnly } from '@/api/knowledge-base';
+import { processContentUrls } from '@/utils/url';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useUIStore } from '@/stores/ui';
 import { useI18n } from 'vue-i18n';
@@ -1073,6 +1074,9 @@ const parseTagAttributes = (attrString: string): Record<string, string> => {
 // Preprocess markdown to handle incomplete images and custom citations
 const preprocessMarkdown = (contentStr: string): string => {
   if (!contentStr.trim()) return '';
+
+  // Process URLs first
+  contentStr = processContentUrls(contentStr);
 
   // Handle streaming image syntax to prevent flickering
   const lastImgStart = contentStr.lastIndexOf('![');
