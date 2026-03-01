@@ -23,8 +23,8 @@ logging.basicConfig(
     ]
 )
 
-def submit_file_to_rag(filepath: str, filename: str) -> dict:
-    """Submit file to RAG system and return API response data."""
+def submit_file_to_rag(filepath: str, filename: str) -> tuple:
+    """Submit file to RAG system and return (data, error_message)."""
     url = f"{API_BASE_URL}/api/v1/knowledge-bases/{KNOWLEDGE_BASE_ID}/knowledge/file"
     
     try:
@@ -35,7 +35,7 @@ def submit_file_to_rag(filepath: str, filename: str) -> dict:
             # Optional parameters can be added here
             data = {
                 'fileName': filename,
-                'enable_multimodel': 'false' 
+                'enable_multimodel': True
             }
             
             response = requests.post(url, files=files, data=data, timeout=60, headers={'X-API-Key': API_KEY})
@@ -43,17 +43,20 @@ def submit_file_to_rag(filepath: str, filename: str) -> dict:
             if response.status_code == 200:
                 result = response.json()
                 if result.get('success'):
-                    return result.get('data')
+                    return result.get('data'), None
                 else:
-                    logging.error(f"API returned failure for {filename}: {result.get('message')}")
-                    return None
+                    msg = result.get('message')
+                    logging.error(f"API returned failure for {filename}: {msg}")
+                    return None, msg
             else:
+                msg = f"Status {response.status_code}: {response.text}"
                 logging.error(f"API request failed for {filename} with status {response.status_code}: {response.text}")
-                return None
+                return None, msg
                 
     except Exception as e:
-        logging.error(f"Exception submitting {filename}: {e}")
-        return None
+        msg = str(e)
+        logging.error(f"Exception submitting {filename}: {msg}")
+        return None, msg
 
 def main():
     if not KNOWLEDGE_BASE_ID:
@@ -84,7 +87,7 @@ def main():
         for task in tasks:
             logging.info(f"Submitting: {task.filename}")
             
-            api_data = submit_file_to_rag(task.filepath, task.filename)
+            api_data, error_msg = submit_file_to_rag(task.filepath, task.filename)
             
             if api_data:
                 # Success
@@ -97,7 +100,7 @@ def main():
             else:
                 # Failed
                 task.file_status = 'failed'
-                task.failed_msg = 'API submission failed'
+                task.failed_msg = error_msg or 'API submission failed'
                 task.process_at = datetime.now()
                 fail_count += 1
                 

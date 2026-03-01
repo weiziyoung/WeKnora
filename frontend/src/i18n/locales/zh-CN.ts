@@ -1,6 +1,7 @@
 export default {
   menu: {
     knowledgeBase: "知识库",
+    erpSync: "ERP文档同步进度",
     agents: "智能体",
     organizations: "共享空间",
     chat: "对话",

@@ -11,6 +11,7 @@ import (
 
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/handler"
+	"github.com/Tencent/WeKnora/internal/handler/erp"
 	"github.com/Tencent/WeKnora/internal/handler/session"
 	"github.com/Tencent/WeKnora/internal/middleware"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
@@ -116,9 +117,20 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterCustomAgentRoutes(v1, params.CustomAgentHandler)
 		RegisterSkillRoutes(v1, params.SkillHandler)
 		RegisterOrganizationRoutes(v1, params.OrganizationHandler)
+		RegisterERPRoutes(v1)
 	}
 
 	return r
+}
+
+// RegisterERPRoutes 注册 ERP 同步相关路由
+func RegisterERPRoutes(r *gin.RouterGroup) {
+	e := r.Group("/erp")
+	{
+		e.GET("/stats", erp.GetStats)
+		e.GET("/documents", erp.GetDocuments)
+		e.GET("/logs", erp.GetLogs)
+	}
 }
 
 // RegisterChunkRoutes 注册分块相关的路由

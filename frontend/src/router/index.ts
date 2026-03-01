@@ -47,6 +47,12 @@ const router = createRouter({
           redirect: "/platform/settings"
         },
         {
+          path: "admin/erp-sync",
+          name: "erpSync",
+          component: () => import("../views/erp-sync/index.vue"),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
           path: "settings",
           name: "settings",
           component: () => import("../views/settings/Settings.vue"),
