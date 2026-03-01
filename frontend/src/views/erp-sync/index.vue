@@ -209,7 +209,8 @@ const logColumns = [
 // Methods
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString();
+  // 直接处理字符串，避免浏览器进行时区转换（防止将服务器的东八区时间误判为UTC再加8小时）
+  return dateStr.replace('T', ' ').split('.')[0];
 };
 
 const getStatusTheme = (status: string) => {
