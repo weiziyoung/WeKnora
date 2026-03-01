@@ -7,6 +7,7 @@ import { onMounted, ref, nextTick, onUnmounted, onUpdated, watch } from "vue";
 import { downKnowledgeDetails, deleteGeneratedQuestion } from "@/api/knowledge-base/index";
 import { MessagePlugin, DialogPlugin } from "tdesign-vue-next";
 import { sanitizeHTML, safeMarkdownToHTML, createSafeImage, isValidImageURL } from '@/utils/security';
+import { processUrl } from '@/utils/url';
 import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
@@ -122,27 +123,12 @@ const checkImage = (url: string) => {
   });
 };
 
-const processImageUrl = (url: string) => {
-  if (!url) return '';
-  if (typeof window === 'undefined') return url;
-
-  try {
-    const urlObj = new URL(url);
-    if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
-      urlObj.hostname = window.location.hostname;
-    }
-    return urlObj.toString();
-  } catch (e) {
-    return url;
-  }
-};
-
 renderer.image = function (href, title, text) {
   if (!href || !isValidImageURL(href)) {
     return `<p>${t('error.invalidImageLink')}</p>`;
   }
   
-  const processedHref = processImageUrl(href);
+  const processedHref = processUrl(href);
 
   const safeImage = createSafeImage(processedHref, text || '', title || '');
   return `<figure>
@@ -267,6 +253,13 @@ const processMarkdown = (markdownText: string) => {
 
   // 最终安全清理
   let result = sanitizeHTML(html);
+
+  // 对所有图片地址进行统一处理（包括 markdown 图片和 html 图片）
+  // 确保外网访问时，localhost/127.0.0.1 图片能正确加载
+  result = result.replace(/<img[^>]+src="([^"]+)"[^>]*>/g, (match, src) => {
+    const newSrc = processUrl(src);
+    return match.replace(src, newSrc);
+  });
   
   return result;
 };
@@ -540,9 +533,9 @@ const handleDetailsScroll = () => {
       <div v-else-if="details.type === 'url'" class="url_box">
         <span class="label">{{ $t('knowledgeBase.urlSource') || '来源网址' }}</span>
         <div class="url_link_box">
-          <a :href="details.source" target="_blank" class="url_link">
+          <a :href="processUrl(details.source)" target="_blank" class="url_link">
             <t-icon name="link" size="14px" />
-            <span class="url_text">{{ details.source }}</span>
+            <span class="url_text">{{ processUrl(details.source) }}</span>
             <t-icon name="jump" size="14px" class="jump-icon" />
           </a>
         </div>
