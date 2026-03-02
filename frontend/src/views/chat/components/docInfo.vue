@@ -138,7 +138,7 @@ const handleDocClick = async (item) => {
              // Should be unreachable if interceptor handles it, but safety first
              throw new Error('文件打开失败');
         }
-        loading.close();
+        MessagePlugin.close(loading);
     } catch (error) {
         console.error('Failed to open file:', error);
         MessagePlugin.closeAll();

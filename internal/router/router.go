@@ -51,6 +51,7 @@ type RouterParams struct {
 	CustomAgentHandler    *handler.CustomAgentHandler
 	SkillHandler          *handler.SkillHandler
 	OrganizationHandler   *handler.OrganizationHandler
+	ERPHandler            *erp.Handler
 }
 
 // NewRouter 创建新的路由
@@ -117,19 +118,20 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterCustomAgentRoutes(v1, params.CustomAgentHandler)
 		RegisterSkillRoutes(v1, params.SkillHandler)
 		RegisterOrganizationRoutes(v1, params.OrganizationHandler)
-		RegisterERPRoutes(v1)
+		RegisterERPRoutes(v1, params.ERPHandler)
 	}
 
 	return r
 }
 
 // RegisterERPRoutes 注册 ERP 同步相关路由
-func RegisterERPRoutes(r *gin.RouterGroup) {
+func RegisterERPRoutes(r *gin.RouterGroup, handler *erp.Handler) {
 	e := r.Group("/erp")
 	{
-		e.GET("/stats", erp.GetStats)
-		e.GET("/documents", erp.GetDocuments)
-		e.GET("/logs", erp.GetLogs)
+		e.GET("/stats", handler.GetStats)
+		e.GET("/documents", handler.GetDocuments)
+		e.GET("/logs", handler.GetLogs)
+		e.GET("/failures", handler.GetFailureStats)
 	}
 }
 

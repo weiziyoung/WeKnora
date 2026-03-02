@@ -1,59 +1,20 @@
 package erp
 
 import (
-	"log"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/Tencent/WeKnora/internal/models/erp"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-var db *gorm.DB
-
-func initDB() {
-	// Attempt to find the database file
-	// It might be in ./weiwo_bridge/weknora_bridge.db if running from project root
-	// or ../weiwo_bridge/weknora_bridge.db if running from bin
-
-	paths := []string{
-		"/app/weiwo_bridge/weknora_bridge.db", // Docker container path
-		"./weiwo_bridge/weknora_bridge.db",
-		"../weiwo_bridge/weknora_bridge.db",
-		"/Users/young/Documents/codehub/WeiWo/WeKnora/weiwo_bridge/weknora_bridge.db", // Fallback to absolute path
-	}
-
-	var dbPath string
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			dbPath = p
-			break
-		}
-	}
-
-	if dbPath == "" {
-		log.Println("Warning: weknora_bridge.db not found in common locations")
-		return
-	}
-
-	var err error
-	db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		log.Printf("Failed to connect to SQLite database at %s: %v", dbPath, err)
-	} else {
-		log.Printf("Connected to SQLite database at %s", dbPath)
-	}
+type Handler struct {
+	db *gorm.DB
 }
 
-// Ensure DB is initialized
-func getDB() *gorm.DB {
-	if db == nil {
-		initDB()
-	}
-	return db
+func NewHandler(db *gorm.DB) *Handler {
+	return &Handler{db: db}
 }
 
 // StatsResponse defines the structure for dashboard statistics
@@ -64,20 +25,14 @@ type StatsResponse struct {
 }
 
 // GetStats returns dashboard statistics
-func GetStats(c *gin.Context) {
-	db := getDB()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection not available"})
-		return
-	}
-
+func (h *Handler) GetStats(c *gin.Context) {
 	// Stats
 	var results []struct {
 		FileStatus string
 		Count      int64
 	}
 	// GORM group by query
-	if err := db.Model(&erp.DocumentStatus{}).Select("file_status, count(id) as count").Group("file_status").Scan(&results).Error; err != nil {
+	if err := h.db.Model(&erp.DocumentStatus{}).Select("file_status, count(id) as count").Group("file_status").Scan(&results).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -99,14 +54,14 @@ func GetStats(c *gin.Context) {
 
 	// Recent Failures
 	var recentFails []erp.DocumentStatus
-	if err := db.Model(&erp.DocumentStatus{}).Where("file_status = ?", "failed").Order("process_at desc").Limit(5).Find(&recentFails).Error; err != nil {
+	if err := h.db.Model(&erp.DocumentStatus{}).Where("file_status = ?", "failed").Order("process_at desc").Limit(5).Find(&recentFails).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Recent Runs
 	var recentRuns []erp.ScriptProcessRecord
-	if err := db.Model(&erp.ScriptProcessRecord{}).Order("process_timestamp desc").Limit(5).Find(&recentRuns).Error; err != nil {
+	if err := h.db.Model(&erp.ScriptProcessRecord{}).Order("process_timestamp desc").Limit(5).Find(&recentRuns).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -127,13 +82,7 @@ type DocumentsResponse struct {
 }
 
 // GetDocuments returns paginated document list
-func GetDocuments(c *gin.Context) {
-	db := getDB()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection not available"})
-		return
-	}
-
+func (h *Handler) GetDocuments(c *gin.Context) {
 	status := c.Query("status")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
@@ -146,7 +95,7 @@ func GetDocuments(c *gin.Context) {
 
 	offset := (page - 1) * perPage
 
-	query := db.Model(&erp.DocumentStatus{})
+	query := h.db.Model(&erp.DocumentStatus{})
 	if status != "" {
 		query = query.Where("file_status = ?", status)
 	}
@@ -173,24 +122,82 @@ func GetDocuments(c *gin.Context) {
 
 // LogsResponse defines the structure for logs response
 type LogsResponse struct {
-	Logs []erp.ScriptProcessRecord `json:"logs"`
+	Logs    []erp.ScriptProcessRecord `json:"logs"`
+	Total   int64                     `json:"total"`
+	Page    int                       `json:"page"`
+	PerPage int                       `json:"per_page"`
 }
 
 // GetLogs returns recent script logs
-func GetLogs(c *gin.Context) {
-	db := getDB()
-	if db == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection not available"})
+func (h *Handler) GetLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+
+	offset := (page - 1) * perPage
+
+	var total int64
+	if err := h.db.Model(&erp.ScriptProcessRecord{}).Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	var logs []erp.ScriptProcessRecord
-	if err := db.Model(&erp.ScriptProcessRecord{}).Order("id desc").Limit(50).Find(&logs).Error; err != nil {
+	if err := h.db.Model(&erp.ScriptProcessRecord{}).Order("id desc").Limit(perPage).Offset(offset).Find(&logs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, LogsResponse{
-		Logs: logs,
+		Logs:    logs,
+		Total:   total,
+		Page:    page,
+		PerPage: perPage,
+	})
+}
+
+// FailureStatsResponse defines the structure for failure statistics
+type FailureStatsResponse struct {
+	Stats []FailureStat `json:"stats"`
+}
+
+type FailureStat struct {
+	Reason string `json:"reason"`
+	Count  int64  `json:"count"`
+}
+
+// GetFailureStats returns aggregated failure statistics
+func (h *Handler) GetFailureStats(c *gin.Context) {
+	var results []struct {
+		FailedMsg string
+		Count     int64
+	}
+
+	// Filter by failed status and group by failed_msg
+	if err := h.db.Model(&erp.DocumentStatus{}).
+		Where("file_status = ?", "failed").
+		Select("failed_msg, count(id) as count").
+		Group("failed_msg").
+		Order("count desc").
+		Scan(&results).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	stats := make([]FailureStat, len(results))
+	for i, r := range results {
+		stats[i] = FailureStat{
+			Reason: r.FailedMsg,
+			Count:  r.Count,
+		}
+	}
+
+	c.JSON(http.StatusOK, FailureStatsResponse{
+		Stats: stats,
 	})
 }

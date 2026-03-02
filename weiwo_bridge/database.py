@@ -1,11 +1,19 @@
 import os
+import urllib.parse
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Text, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 
 # Configuration
-DB_PATH = 'weknora_bridge.db'
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+# Postgres setup from env vars
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres123!@#")
+DB_NAME = os.getenv("DB_NAME", "weknora")
+
+encoded_password = urllib.parse.quote_plus(DB_PASSWORD)
+DATABASE_URL = f"postgresql://{DB_USER}:{encoded_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 Base = declarative_base()
 
@@ -48,13 +56,6 @@ class ScriptProcessRecord(Base):
 
 def get_engine():
     engine = create_engine(DATABASE_URL)
-    
-    @event.listens_for(engine, "connect")
-    def set_sqlite_pragma(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.close()
-        
     return engine
 
 def init_db():

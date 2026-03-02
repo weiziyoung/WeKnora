@@ -60,6 +60,20 @@
         </div>
       </t-tab-panel>
 
+      <t-tab-panel value="failures" label="失败汇总">
+        <div class="tab-content">
+          <t-button theme="primary" class="mb-2" @click="fetchFailures">刷新</t-button>
+          <t-table
+            :data="failureStats"
+            :columns="failureColumns"
+            row-key="reason"
+            :loading="failuresLoading"
+            :pagination="null"
+          >
+          </t-table>
+        </div>
+      </t-tab-panel>
+
       <t-tab-panel value="documents" label="文档列表">
         <div class="tab-content">
           <div class="filter-bar">
@@ -102,8 +116,10 @@
             :data="logs"
             :columns="logColumns"
             row-key="id"
+            :pagination="logsPagination"
             :loading="logsLoading"
             size="small"
+            @page-change="onLogsPageChange"
           >
             <template #process_timestamp="{ row }">
               {{ formatDate(row.process_timestamp) }}
@@ -121,16 +137,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { 
   getDashboardStats, 
   getDocuments, 
   getLogs,
+  getFailureStats,
   type ErpStats,
   type RecentFail,
   type RecentRun,
   type DocumentItem,
-  type LogItem
+  type LogItem,
+  type FailureStat
 } from '@/api/erp-sync';
 import { MessagePlugin } from 'tdesign-vue-next';
 
@@ -143,11 +161,19 @@ const recentFails = ref<RecentFail[]>([]);
 const recentRuns = ref<RecentRun[]>([]);
 const documents = ref<DocumentItem[]>([]);
 const logs = ref<LogItem[]>([]);
+const failureStats = ref<FailureStat[]>([]);
 const docFilterStatus = ref('');
 const docsLoading = ref(false);
 const logsLoading = ref(false);
+const failuresLoading = ref(false);
 
 const pagination = ref({
+  current: 1,
+  pageSize: 20,
+  total: 0
+});
+
+const logsPagination = ref({
   current: 1,
   pageSize: 20,
   total: 0
@@ -181,6 +207,11 @@ const failColumns = [
   { colKey: 'filename', title: '文件名', ellipsis: true },
   { colKey: 'failed_msg', title: '失败原因', ellipsis: true },
   { colKey: 'process_at', title: '失败时间', width: 180 }
+];
+
+const failureColumns = [
+  { colKey: 'reason', title: '失败原因', ellipsis: true },
+  { colKey: 'count', title: '数量', width: 100 }
 ];
 
 const runColumns = [
@@ -224,7 +255,7 @@ const getStatusTheme = (status: string) => {
   }
 };
 
-const fetchDashboard = async () => {
+const fetchDashboard = async (silent = false) => {
   try {
     const data = await getDashboardStats();
     stats.value = data.stats;
@@ -232,12 +263,12 @@ const fetchDashboard = async () => {
     recentRuns.value = data.recent_runs;
   } catch (error) {
     console.error('Failed to fetch dashboard stats', error);
-    MessagePlugin.error('获取仪表盘数据失败');
+    if (!silent) MessagePlugin.error('获取仪表盘数据失败');
   }
 };
 
-const fetchDocuments = async (page = 1) => {
-  docsLoading.value = true;
+const fetchDocuments = async (page = 1, silent = false) => {
+  if (!silent) docsLoading.value = true;
   try {
     const data = await getDocuments(page, docFilterStatus.value, pagination.value.pageSize);
     documents.value = data.documents;
@@ -245,9 +276,9 @@ const fetchDocuments = async (page = 1) => {
     pagination.value.total = data.total;
   } catch (error) {
     console.error('Failed to fetch documents', error);
-    MessagePlugin.error('获取文档列表失败');
+    if (!silent) MessagePlugin.error('获取文档列表失败');
   } finally {
-    docsLoading.value = false;
+    if (!silent) docsLoading.value = false;
   }
 };
 
@@ -257,23 +288,86 @@ const onPageChange = (pageInfo: { current: number; pageSize: number }) => {
   fetchDocuments(pageInfo.current);
 };
 
-const fetchLogs = async () => {
-  logsLoading.value = true;
+const fetchLogs = async (page = 1, silent = false) => {
+  if (!silent) logsLoading.value = true;
   try {
-    const data = await getLogs();
+    const data = await getLogs(page, logsPagination.value.pageSize);
     logs.value = data.logs;
+    logsPagination.value.current = data.page;
+    logsPagination.value.total = data.total;
   } catch (error) {
     console.error('Failed to fetch logs', error);
-    MessagePlugin.error('获取日志失败');
+    if (!silent) MessagePlugin.error('获取日志失败');
   } finally {
-    logsLoading.value = false;
+    if (!silent) logsLoading.value = false;
   }
 };
 
+const onLogsPageChange = (pageInfo: { current: number; pageSize: number }) => {
+  logsPagination.value.current = pageInfo.current;
+  logsPagination.value.pageSize = pageInfo.pageSize;
+  fetchLogs(pageInfo.current);
+};
+
+const fetchFailures = async (silent = false) => {
+  if (!silent) failuresLoading.value = true;
+  try {
+    const data = await getFailureStats();
+    failureStats.value = data.stats;
+  } catch (error) {
+    console.error('Failed to fetch failure stats', error);
+    if (!silent) MessagePlugin.error('获取失败汇总失败');
+  } finally {
+    if (!silent) failuresLoading.value = false;
+  }
+};
+
+const refreshCurrentTab = (silent = false) => {
+  switch (activeTab.value) {
+    case 'dashboard':
+      fetchDashboard(silent);
+      break;
+    case 'failures':
+      fetchFailures(silent);
+      break;
+    case 'documents':
+      fetchDocuments(pagination.value.current, silent);
+      break;
+    case 'logs':
+      fetchLogs(logsPagination.value.current, silent);
+      break;
+  }
+};
+
+// Polling
+let pollingTimer: ReturnType<typeof setInterval> | null = null;
+
+const startPolling = () => {
+  stopPolling();
+  pollingTimer = setInterval(() => {
+    refreshCurrentTab(true);
+  }, 5000); // Poll every 5 seconds
+};
+
+const stopPolling = () => {
+  if (pollingTimer) {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
+  }
+};
+
+// Watch for tab changes
+watch(activeTab, () => {
+  refreshCurrentTab(false);
+});
+
 onMounted(() => {
-  fetchDashboard();
-  fetchDocuments();
-  fetchLogs();
+  refreshCurrentTab(false);
+  startPolling();
+});
+
+onUnmounted(() => {
+  stopPolling();
 });
 </script>
 

@@ -99,24 +99,35 @@ export interface LogItem {
   message: string | null;
 }
 
-export interface LogsResponse {
-  logs: LogItem[];
+export interface FailureStat {
+  reason: string;
+  count: number;
 }
 
-// API Methods
+export interface FailureStatsResponse {
+  stats: FailureStat[];
+}
+
 export const getDashboardStats = async (): Promise<DashboardData> => {
-  const response = await erpSyncApi.get<DashboardData>('/stats');
-  return response.data;
+  const { data } = await erpSyncApi.get('/stats');
+  return data;
 };
 
-export const getDocuments = async (page: number = 1, status: string = '', per_page: number = 20): Promise<DocumentListResponse> => {
-  const response = await erpSyncApi.get<DocumentListResponse>('/documents', {
-    params: { page, status, per_page }
+export const getDocuments = async (page = 1, status = '', perPage = 20): Promise<DocumentListResponse> => {
+  const { data } = await erpSyncApi.get('/documents', {
+    params: { page, status, per_page: perPage }
   });
-  return response.data;
+  return data;
 };
 
-export const getLogs = async (): Promise<LogsResponse> => {
-  const response = await erpSyncApi.get<LogsResponse>('/logs');
-  return response.data;
+export const getLogs = async (page = 1, perPage = 20): Promise<{ logs: LogItem[], total: number, page: number }> => {
+  const { data } = await erpSyncApi.get('/logs', {
+    params: { page, per_page: perPage }
+  });
+  return data;
+};
+
+export const getFailureStats = async (): Promise<FailureStatsResponse> => {
+  const { data } = await erpSyncApi.get('/failures');
+  return data;
 };
