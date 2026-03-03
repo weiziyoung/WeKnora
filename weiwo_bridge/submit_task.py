@@ -49,7 +49,7 @@ def submit_file_to_rag(filepath: str, filename: str) -> tuple:
                     logging.error(f"API returned failure for {filename}: {msg}")
                     return None, msg
             else:
-                msg = f"Status {response.status_code}: {response.text}"
+                msg = f"Status {response.status_code}"
                 logging.error(f"API request failed for {filename} with status {response.status_code}: {response.text}")
                 return None, msg
                 
@@ -74,8 +74,8 @@ def main():
     session = get_session()
     
     try:
-        # 1. Fetch 'discover' tasks
-        tasks = session.query(DocumentStatus).filter(DocumentStatus.file_status == 'discover').limit(BATCH_SIZE).all()
+        # 1. Fetch 'discover' tasks, ordered by last_modified_time descending (newest first)
+        tasks = session.query(DocumentStatus).filter(DocumentStatus.file_status == 'discover').order_by(DocumentStatus.last_modified_time.desc()).limit(BATCH_SIZE).all()
         
         if not tasks:
             logging.info("No tasks to process.")
