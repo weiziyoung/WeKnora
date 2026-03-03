@@ -161,12 +161,20 @@ class DocReaderServicer(docreader_pb2_grpc.DocReaderServicer):
                     request.file_name, file_type, request.file_content, chunking_config
                 )
 
+                if not result.is_valid():
+                    error_msg = "empty file"
+                    logger.error(error_msg)
+                    # context.set_code(grpc.StatusCode.INTERNAL)
+                    # context.set_details(error_msg)
+                    return ReadResponse(error=error_msg)
+
                 if not result:
                     error_msg = "Failed to parse file"
                     logger.error(error_msg)
-                    context.set_code(grpc.StatusCode.INTERNAL)
-                    context.set_details(error_msg)
-                    return ReadResponse()
+                    # context.set_code(grpc.StatusCode.INTERNAL)
+                    # context.set_details(error_msg)
+                    return ReadResponse(error=error_msg)
+
 
                 # Convert to protobuf message
                 logger.info(
@@ -186,8 +194,8 @@ class DocReaderServicer(docreader_pb2_grpc.DocReaderServicer):
                 error_msg = f"Error reading file: {str(e)}"
                 logger.error(error_msg)
                 logger.info(f"Detailed traceback: {traceback.format_exc()}")
-                context.set_code(grpc.StatusCode.INTERNAL)
-                context.set_details(str(e))
+                # context.set_code(grpc.StatusCode.INTERNAL)
+                # context.set_details(str(e))
                 return ReadResponse(error=str(e))
 
     def ReadFromURL(self, request: ReadFromURLRequest, context):

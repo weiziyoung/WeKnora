@@ -6685,6 +6685,16 @@ func (s *knowledgeService) triggerManualProcessing(ctx context.Context,
 		return
 	}
 
+	if resp.Error != "" {
+		logger.GetLogger(ctx).WithField("knowledge_id", knowledge.ID).
+			Errorf("DocReader returned error: %s", resp.Error)
+		knowledge.ParseStatus = "failed"
+		knowledge.ErrorMessage = resp.Error
+		knowledge.UpdatedAt = time.Now()
+		s.repo.UpdateKnowledge(ctx, knowledge)
+		return
+	}
+
 	if sync {
 		s.processChunks(ctx, kb, knowledge, resp.Chunks)
 		return
@@ -7052,8 +7062,17 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 				knowledge.ErrorMessage = err.Error()
 				knowledge.UpdatedAt = time.Now()
 				s.repo.UpdateKnowledge(ctx, knowledge)
+				return nil
 			}
 			return fmt.Errorf("failed to read file from docreader: %w", err)
+		}
+		if fileResp.Error != "" {
+			logger.Errorf(ctx, "DocReader returned error (file): %s", fileResp.Error)
+			knowledge.ParseStatus = "failed"
+			knowledge.ErrorMessage = fileResp.Error
+			knowledge.UpdatedAt = time.Now()
+			s.repo.UpdateKnowledge(ctx, knowledge)
+			return nil
 		}
 		chunks = fileResp.Chunks
 	} else if payload.URL != "" {
@@ -7097,8 +7116,17 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 				knowledge.ErrorMessage = err.Error()
 				knowledge.UpdatedAt = time.Now()
 				s.repo.UpdateKnowledge(ctx, knowledge)
+				return nil
 			}
 			return fmt.Errorf("failed to read from URL: %w", err)
+		}
+		if urlResp.Error != "" {
+			logger.Errorf(ctx, "DocReader returned error (URL): %s", urlResp.Error)
+			knowledge.ParseStatus = "failed"
+			knowledge.ErrorMessage = urlResp.Error
+			knowledge.UpdatedAt = time.Now()
+			s.repo.UpdateKnowledge(ctx, knowledge)
+			return nil
 		}
 		chunks = urlResp.Chunks
 	} else if len(payload.Passages) > 0 {
@@ -7184,8 +7212,17 @@ func (s *knowledgeService) ProcessDocument(ctx context.Context, t *asynq.Task) e
 				knowledge.ErrorMessage = err.Error()
 				knowledge.UpdatedAt = time.Now()
 				s.repo.UpdateKnowledge(ctx, knowledge)
+				return nil
 			}
 			return fmt.Errorf("failed to read file from docreader: %w", err)
+		}
+		if fileResp.Error != "" {
+			logger.Errorf(ctx, "DocReader returned error (file): %s", fileResp.Error)
+			knowledge.ParseStatus = "failed"
+			knowledge.ErrorMessage = fileResp.Error
+			knowledge.UpdatedAt = time.Now()
+			s.repo.UpdateKnowledge(ctx, knowledge)
+			return nil
 		}
 		chunks = fileResp.Chunks
 	}

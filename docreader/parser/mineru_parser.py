@@ -397,6 +397,7 @@ class MinerUAPIParser(StdMinerUParser):
     ):
         super().__init__(**kwargs)
         self.api_token = mineru_api_token if mineru_api_token else CONFIG.mineru_api_token
+        #self.api_token = ""
         # Base URL for official API
         self.mineru_base_url = "https://mineru.net/api/v4"
         # Force enable since we don't rely on ping() for API

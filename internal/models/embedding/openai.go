@@ -167,7 +167,8 @@ func (e *OpenAIEmbedder) BatchEmbed(ctx context.Context, texts []string) ([][]fl
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		logger.GetLogger(ctx).Errorf("OpenAIEmbedder EmbedBatch API error: Http Status %s", resp.Status)
+		logger.GetLogger(ctx).Errorf("OpenAIEmbedder EmbedBatch API error: Http Status %s, Request Body Size: %d bytes, Text Count: %d, Response: %s",
+			resp.Status, len(jsonData), len(texts), string(body))
 		return nil, fmt.Errorf("EmbedBatch API error: Http Status %s", resp.Status)
 	}
 

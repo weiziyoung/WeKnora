@@ -396,6 +396,7 @@ class BaseParser(ABC):
             f"Parsing document with {self.__class__.__name__}, bytes: {len(content)}"
         )
         document = self.parse_into_text(content)
+
         logger.info(
             f"Extracted {len(document.content)} characters from {self.file_name}"
         )
