@@ -160,6 +160,7 @@ export default {
     draft: "초안",
     draftTip: "임시 저장된 내용, 검색에 포함되지 않음",
     untitledDocument: "제목 없는 문서",
+    reparseDocument: "문서 재파싱",
     deleteDocument: "문서 삭제",
     parsingFailed: "파싱 실패",
     parsingInProgress: "파싱 중...",

@@ -2475,6 +2475,7 @@ func (s *knowledgeService) ReparseKnowledge(ctx context.Context, knowledgeID str
 	existing.Description = ""
 	existing.ProcessedAt = nil
 	existing.EmbeddingModelID = kb.EmbeddingModelID
+	existing.ErrorMessage = ""
 
 	if err := s.repo.UpdateKnowledge(ctx, existing); err != nil {
 		logger.Errorf(ctx, "Failed to update knowledge status before reparse: %v", err)

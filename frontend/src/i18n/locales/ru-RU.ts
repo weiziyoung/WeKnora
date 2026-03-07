@@ -160,6 +160,7 @@ export default {
     draft: 'Черновик',
     draftTip: 'Временно сохранён, не участвует в поиске',
     untitledDocument: 'Документ без названия',
+    reparseDocument: 'Повторный анализ документа',
     deleteDocument: 'Удалить документ',
     parsingFailed: 'Парсинг не удался',
     parsingInProgress: 'Парсинг...',

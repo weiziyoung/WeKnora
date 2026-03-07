@@ -51,6 +51,7 @@ type RouterParams struct {
 	CustomAgentHandler    *handler.CustomAgentHandler
 	SkillHandler          *handler.SkillHandler
 	OrganizationHandler   *handler.OrganizationHandler
+	LabHandler            *handler.LabHandler
 	ERPHandler            *erp.Handler
 }
 
@@ -119,9 +120,18 @@ func NewRouter(params RouterParams) *gin.Engine {
 		RegisterSkillRoutes(v1, params.SkillHandler)
 		RegisterOrganizationRoutes(v1, params.OrganizationHandler)
 		RegisterERPRoutes(v1, params.ERPHandler)
+		RegisterLabRoutes(v1, params.LabHandler)
 	}
 
 	return r
+}
+
+// RegisterLabRoutes 注册实验室相关路由
+func RegisterLabRoutes(r *gin.RouterGroup, handler *handler.LabHandler) {
+	lab := r.Group("/lab")
+	{
+		lab.POST("/splitter/compare", handler.CompareSplitters)
+	}
 }
 
 // RegisterERPRoutes 注册 ERP 同步相关路由

@@ -5,7 +5,7 @@ import warnings
 
 from docreader.proto import docreader_pb2 as docreader__pb2
 
-GRPC_GENERATED_VERSION = '1.76.0'
+GRPC_GENERATED_VERSION = '1.78.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -45,6 +45,11 @@ class DocReaderStub(object):
                 request_serializer=docreader__pb2.ReadFromURLRequest.SerializeToString,
                 response_deserializer=docreader__pb2.ReadResponse.FromString,
                 _registered_method=True)
+        self.CompareSplitters = channel.unary_unary(
+                '/docreader.DocReader/CompareSplitters',
+                request_serializer=docreader__pb2.CompareSplittersRequest.SerializeToString,
+                response_deserializer=docreader__pb2.CompareSplittersResponse.FromString,
+                _registered_method=True)
 
 
 class DocReaderServicer(object):
@@ -65,6 +70,13 @@ class DocReaderServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def CompareSplitters(self, request, context):
+        """对比分块效果
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DocReaderServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -77,6 +89,11 @@ def add_DocReaderServicer_to_server(servicer, server):
                     servicer.ReadFromURL,
                     request_deserializer=docreader__pb2.ReadFromURLRequest.FromString,
                     response_serializer=docreader__pb2.ReadResponse.SerializeToString,
+            ),
+            'CompareSplitters': grpc.unary_unary_rpc_method_handler(
+                    servicer.CompareSplitters,
+                    request_deserializer=docreader__pb2.CompareSplittersRequest.FromString,
+                    response_serializer=docreader__pb2.CompareSplittersResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -134,6 +151,33 @@ class DocReader(object):
             '/docreader.DocReader/ReadFromURL',
             docreader__pb2.ReadFromURLRequest.SerializeToString,
             docreader__pb2.ReadResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CompareSplitters(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/docreader.DocReader/CompareSplitters',
+            docreader__pb2.CompareSplittersRequest.SerializeToString,
+            docreader__pb2.CompareSplittersResponse.FromString,
             options,
             channel_credentials,
             insecure,

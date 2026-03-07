@@ -81,14 +81,12 @@ func NewOpenAIEmbedder(apiKey, baseURL, modelName string,
 
 // Embed converts text to vector
 func (e *OpenAIEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
-	for range 3 {
-		embeddings, err := e.BatchEmbed(ctx, []string{text})
-		if err != nil {
-			return nil, err
-		}
-		if len(embeddings) > 0 {
-			return embeddings[0], nil
-		}
+	embeddings, err := e.BatchEmbedWithPool(ctx, e, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	if len(embeddings) > 0 {
+		return embeddings[0], nil
 	}
 	return nil, fmt.Errorf("no embedding returned")
 }

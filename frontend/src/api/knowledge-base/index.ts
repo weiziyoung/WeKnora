@@ -102,6 +102,10 @@ export function delKnowledgeDetails(id: string) {
   return del(`/api/v1/knowledge/${id}`);
 }
 
+export function reparseKnowledge(id: string) {
+  return post(`/api/v1/knowledge/${id}/reparse`, {});
+}
+
 export function downKnowledgeDetails(id: string) {
   return getDown(`/api/v1/knowledge/${id}/download`);
 }

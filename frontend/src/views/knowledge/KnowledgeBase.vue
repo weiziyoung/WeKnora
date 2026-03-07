@@ -93,7 +93,7 @@ const kbLastUpdated = computed(() => {
 });
 
 const knowledgeList = ref<Array<{ id: string; name: string; type?: string }>>([]);
-let { cardList, total, moreIndex, details, getKnowled, delKnowledge, openMore, onVisibleChange, getCardDetails, getfDetails } = useKnowledgeBase(kbId.value)
+let { cardList, total, moreIndex, details, getKnowled, delKnowledge, reparseKnowledgeItem, openMore, onVisibleChange, getCardDetails, getfDetails } = useKnowledgeBase(kbId.value)
 let isCardDetails = ref(false);
 let timeout: ReturnType<typeof setInterval> | null = null;
 let delDialog = ref(false)
@@ -633,6 +633,7 @@ const updateStatus = (analyzeList: KnowledgeCard[]) => {
           cardList.value[index].parse_status = item.parse_status;
           cardList.value[index].summary_status = item.summary_status;
           cardList.value[index].description = item.description;
+          cardList.value[index].error_message = item.error_message;
         });
       }
     }).catch((_err) => {
@@ -695,6 +696,10 @@ const delCard = (index: number, item: KnowledgeCard) => {
   knowledgeIndex.value = index;
   knowledge.value = item;
   delDialog.value = true;
+};
+
+const handleReparse = (index: number, item: KnowledgeCard) => {
+  reparseKnowledgeItem(index, item);
 };
 
 const manualEditorSuccess = ({ kbId: savedKbId }: { kbId: string; knowledgeId: string; status: 'draft' | 'publish' }) => {
@@ -1493,6 +1498,14 @@ async function createNewSession(value: string): Promise<void> {
                                 <t-icon class="icon" name="edit" />
                                 <span>{{ t('knowledgeBase.editDocument') }}</span>
                               </div>
+                              <div
+                                v-else
+                                class="card-menu-item"
+                                @click.stop="handleReparse(index, item)"
+                              >
+                                <t-icon class="icon" name="refresh" />
+                                <span>{{ t('knowledgeBase.reparseDocument') || '重新解析' }}</span>
+                              </div>
                               <div class="card-menu-item danger" @click.stop="delCard(index, item)">
                                 <t-icon class="icon" name="delete" />
                                 <span>{{ t('knowledgeBase.deleteDocument') }}</span>
@@ -1510,7 +1523,7 @@ async function createNewSession(value: string): Promise<void> {
                       </div>
                       <div v-else-if="item.parse_status === 'failed'" class="card-analyze failure">
                         <t-icon name="close-circle" class="card-analyze-loading failure"></t-icon>
-                        <span class="card-analyze-txt failure">{{ t('knowledgeBase.parsingFailed') }}</span>
+                        <span class="card-analyze-txt failure" :title="item.error_message || t('knowledgeBase.parsingFailed')">{{ item.error_message || t('knowledgeBase.parsingFailed') }}</span>
                       </div>
                       <div v-else-if="item.parse_status === 'draft'" class="card-draft">
                         <t-tag size="small" theme="warning" variant="light-outline">{{ t('knowledgeBase.draft') }}</t-tag>
@@ -2676,6 +2689,12 @@ async function createNewSession(value: string): Promise<void> {
     font-family: "PingFang SC";
     font-size: 11px;
     margin-left: 8px;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
   .failure {

@@ -24,6 +24,9 @@ from docreader.proto.docreader_pb2 import (
     ReadFromURLRequest,
     ReadResponse,
     StorageProvider,
+    CompareSplittersRequest,
+    CompareSplittersResponse,
+    SplitterResult,
 )
 from docreader.utils.request import init_logging_request_id, request_id_context
 
@@ -197,6 +200,73 @@ class DocReaderServicer(docreader_pb2_grpc.DocReaderServicer):
                 # context.set_code(grpc.StatusCode.INTERNAL)
                 # context.set_details(str(e))
                 return ReadResponse(error=str(e))
+
+    def CompareSplitters(self, request: CompareSplittersRequest, context):
+        from docreader.splitter.splitter import TextSplitter
+        from docreader.splitter.langchain_adapter import split_by_markdown_header
+        import time
+
+        text = request.text
+        chunk_size = request.chunk_size or 512
+        chunk_overlap = request.chunk_overlap or 50
+        
+        logger.info(f"Comparing splitters for text length: {len(text)}, chunk_size: {chunk_size}, overlap: {chunk_overlap}")
+        
+        results = []
+
+        # 1. TextSplitter (Current)
+        start_time = time.time()
+        try:
+            splitter = TextSplitter(
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+                separators=["\n\n", "\n", "。", " "]
+            )
+            # TextSplitter returns List[Tuple[int, int, str]]
+            chunk_tuples = splitter.split_text(text)
+            chunks = [
+                Chunk(seq=i, content=t, start=start, end=end)
+                for i, (start, end, t) in enumerate(chunk_tuples)
+            ]
+            execution_time = time.time() - start_time
+            results.append(SplitterResult(
+                splitter_name="TextSplitter (Current)",
+                chunks=chunks,
+                total_chunks=len(chunks),
+                execution_time=execution_time
+            ))
+        except Exception as e:
+            logger.error(f"TextSplitter failed: {e}")
+            logger.error(traceback.format_exc())
+            results.append(SplitterResult(
+                splitter_name="TextSplitter (Current)",
+                chunks=[],
+                total_chunks=0,
+                execution_time=0
+            ))
+
+        # 2. MarkdownHeaderTextSplitter (Langchain)
+        start_time = time.time()
+        try:
+            chunks = split_by_markdown_header(text)
+            execution_time = time.time() - start_time
+            results.append(SplitterResult(
+                splitter_name="MarkdownHeaderTextSplitter (Langchain)",
+                chunks=chunks,
+                total_chunks=len(chunks),
+                execution_time=execution_time
+            ))
+        except Exception as e:
+             logger.error(f"Langchain splitter failed: {e}")
+             logger.error(traceback.format_exc())
+             results.append(SplitterResult(
+                splitter_name="MarkdownHeaderTextSplitter (Langchain)",
+                chunks=[],
+                total_chunks=0,
+                execution_time=0
+            ))
+            
+        return CompareSplittersResponse(results=results)
 
     def ReadFromURL(self, request: ReadFromURLRequest, context):
         # Get or generate request ID

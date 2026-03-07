@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x64ocreader.proto\x12\tdocreader\"\xb9\x01\n\rStorageConfig\x12,\n\x08provider\x18\x01 \x01(\x0e\x32\x1a.docreader.StorageProvider\x12\x0e\n\x06region\x18\x02 \x01(\t\x12\x13\n\x0b\x62ucket_name\x18\x03 \x01(\t\x12\x15\n\raccess_key_id\x18\x04 \x01(\t\x12\x19\n\x11secret_access_key\x18\x05 \x01(\t\x12\x0e\n\x06\x61pp_id\x18\x06 \x01(\t\x12\x13\n\x0bpath_prefix\x18\x07 \x01(\t\"Z\n\tVLMConfig\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x10\n\x08\x62\x61se_url\x18\x02 \x01(\t\x12\x0f\n\x07\x61pi_key\x18\x03 \x01(\t\x12\x16\n\x0einterface_type\x18\x04 \x01(\t\"\xc2\x01\n\nReadConfig\x12\x12\n\nchunk_size\x18\x01 \x01(\x05\x12\x15\n\rchunk_overlap\x18\x02 \x01(\x05\x12\x12\n\nseparators\x18\x03 \x03(\t\x12\x19\n\x11\x65nable_multimodal\x18\x04 \x01(\x08\x12\x30\n\x0estorage_config\x18\x05 \x01(\x0b\x32\x18.docreader.StorageConfig\x12(\n\nvlm_config\x18\x06 \x01(\x0b\x32\x14.docreader.VLMConfig\"\x91\x01\n\x13ReadFromFileRequest\x12\x14\n\x0c\x66ile_content\x18\x01 \x01(\x0c\x12\x11\n\tfile_name\x18\x02 \x01(\t\x12\x11\n\tfile_type\x18\x03 \x01(\t\x12*\n\x0bread_config\x18\x04 \x01(\x0b\x32\x15.docreader.ReadConfig\x12\x12\n\nrequest_id\x18\x05 \x01(\t\"p\n\x12ReadFromURLRequest\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12*\n\x0bread_config\x18\x03 \x01(\x0b\x32\x15.docreader.ReadConfig\x12\x12\n\nrequest_id\x18\x04 \x01(\t\"i\n\x05Image\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\x0f\n\x07\x63\x61ption\x18\x02 \x01(\t\x12\x10\n\x08ocr_text\x18\x03 \x01(\t\x12\x14\n\x0coriginal_url\x18\x04 \x01(\t\x12\r\n\x05start\x18\x05 \x01(\x05\x12\x0b\n\x03\x65nd\x18\x06 \x01(\x05\"c\n\x05\x43hunk\x12\x0f\n\x07\x63ontent\x18\x01 \x01(\t\x12\x0b\n\x03seq\x18\x02 \x01(\x05\x12\r\n\x05start\x18\x03 \x01(\x05\x12\x0b\n\x03\x65nd\x18\x04 \x01(\x05\x12 \n\x06images\x18\x05 \x03(\x0b\x32\x10.docreader.Image\"?\n\x0cReadResponse\x12 \n\x06\x63hunks\x18\x01 \x03(\x0b\x32\x10.docreader.Chunk\x12\r\n\x05\x65rror\x18\x02 \x01(\t*G\n\x0fStorageProvider\x12 \n\x1cSTORAGE_PROVIDER_UNSPECIFIED\x10\x00\x12\x07\n\x03\x43OS\x10\x01\x12\t\n\x05MINIO\x10\x02\x32\x9f\x01\n\tDocReader\x12I\n\x0cReadFromFile\x12\x1e.docreader.ReadFromFileRequest\x1a\x17.docreader.ReadResponse\"\x00\x12G\n\x0bReadFromURL\x12\x1d.docreader.ReadFromURLRequest\x1a\x17.docreader.ReadResponse\"\x00\x42\x35Z3github.com/Tencent/WeKnora/internal/docreader/protob\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x64ocreader.proto\x12\tdocreader\"\xb9\x01\n\rStorageConfig\x12,\n\x08provider\x18\x01 \x01(\x0e\x32\x1a.docreader.StorageProvider\x12\x0e\n\x06region\x18\x02 \x01(\t\x12\x13\n\x0b\x62ucket_name\x18\x03 \x01(\t\x12\x15\n\raccess_key_id\x18\x04 \x01(\t\x12\x19\n\x11secret_access_key\x18\x05 \x01(\t\x12\x0e\n\x06\x61pp_id\x18\x06 \x01(\t\x12\x13\n\x0bpath_prefix\x18\x07 \x01(\t\"Z\n\tVLMConfig\x12\x12\n\nmodel_name\x18\x01 \x01(\t\x12\x10\n\x08\x62\x61se_url\x18\x02 \x01(\t\x12\x0f\n\x07\x61pi_key\x18\x03 \x01(\t\x12\x16\n\x0einterface_type\x18\x04 \x01(\t\"\xc2\x01\n\nReadConfig\x12\x12\n\nchunk_size\x18\x01 \x01(\x05\x12\x15\n\rchunk_overlap\x18\x02 \x01(\x05\x12\x12\n\nseparators\x18\x03 \x03(\t\x12\x19\n\x11\x65nable_multimodal\x18\x04 \x01(\x08\x12\x30\n\x0estorage_config\x18\x05 \x01(\x0b\x32\x18.docreader.StorageConfig\x12(\n\nvlm_config\x18\x06 \x01(\x0b\x32\x14.docreader.VLMConfig\"R\n\x17\x43ompareSplittersRequest\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x12\n\nchunk_size\x18\x02 \x01(\x05\x12\x15\n\rchunk_overlap\x18\x03 \x01(\x05\"w\n\x0eSplitterResult\x12\x15\n\rsplitter_name\x18\x01 \x01(\t\x12 \n\x06\x63hunks\x18\x02 \x03(\x0b\x32\x10.docreader.Chunk\x12\x14\n\x0ctotal_chunks\x18\x03 \x01(\x05\x12\x16\n\x0e\x65xecution_time\x18\x04 \x01(\x01\"U\n\x18\x43ompareSplittersResponse\x12*\n\x07results\x18\x01 \x03(\x0b\x32\x19.docreader.SplitterResult\x12\r\n\x05\x65rror\x18\x02 \x01(\t\"\x91\x01\n\x13ReadFromFileRequest\x12\x14\n\x0c\x66ile_content\x18\x01 \x01(\x0c\x12\x11\n\tfile_name\x18\x02 \x01(\t\x12\x11\n\tfile_type\x18\x03 \x01(\t\x12*\n\x0bread_config\x18\x04 \x01(\x0b\x32\x15.docreader.ReadConfig\x12\x12\n\nrequest_id\x18\x05 \x01(\t\"p\n\x12ReadFromURLRequest\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12*\n\x0bread_config\x18\x03 \x01(\x0b\x32\x15.docreader.ReadConfig\x12\x12\n\nrequest_id\x18\x04 \x01(\t\"i\n\x05Image\x12\x0b\n\x03url\x18\x01 \x01(\t\x12\x0f\n\x07\x63\x61ption\x18\x02 \x01(\t\x12\x10\n\x08ocr_text\x18\x03 \x01(\t\x12\x14\n\x0coriginal_url\x18\x04 \x01(\t\x12\r\n\x05start\x18\x05 \x01(\x05\x12\x0b\n\x03\x65nd\x18\x06 \x01(\x05\"c\n\x05\x43hunk\x12\x0f\n\x07\x63ontent\x18\x01 \x01(\t\x12\x0b\n\x03seq\x18\x02 \x01(\x05\x12\r\n\x05start\x18\x03 \x01(\x05\x12\x0b\n\x03\x65nd\x18\x04 \x01(\x05\x12 \n\x06images\x18\x05 \x03(\x0b\x32\x10.docreader.Image\"?\n\x0cReadResponse\x12 \n\x06\x63hunks\x18\x01 \x03(\x0b\x32\x10.docreader.Chunk\x12\r\n\x05\x65rror\x18\x02 \x01(\t*G\n\x0fStorageProvider\x12 \n\x1cSTORAGE_PROVIDER_UNSPECIFIED\x10\x00\x12\x07\n\x03\x43OS\x10\x01\x12\t\n\x05MINIO\x10\x02\x32\xfe\x01\n\tDocReader\x12I\n\x0cReadFromFile\x12\x1e.docreader.ReadFromFileRequest\x1a\x17.docreader.ReadResponse\"\x00\x12G\n\x0bReadFromURL\x12\x1d.docreader.ReadFromURLRequest\x1a\x17.docreader.ReadResponse\"\x00\x12]\n\x10\x43ompareSplitters\x12\".docreader.CompareSplittersRequest\x1a#.docreader.CompareSplittersResponse\"\x00\x42\x35Z3github.com/Tencent/WeKnora/internal/docreader/protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,24 +32,30 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'docreader_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z3github.com/Tencent/WeKnora/internal/docreader/proto'
-  _globals['_STORAGEPROVIDER']._serialized_start=1042
-  _globals['_STORAGEPROVIDER']._serialized_end=1113
+  _globals['_STORAGEPROVIDER']._serialized_start=1334
+  _globals['_STORAGEPROVIDER']._serialized_end=1405
   _globals['_STORAGECONFIG']._serialized_start=31
   _globals['_STORAGECONFIG']._serialized_end=216
   _globals['_VLMCONFIG']._serialized_start=218
   _globals['_VLMCONFIG']._serialized_end=308
   _globals['_READCONFIG']._serialized_start=311
   _globals['_READCONFIG']._serialized_end=505
-  _globals['_READFROMFILEREQUEST']._serialized_start=508
-  _globals['_READFROMFILEREQUEST']._serialized_end=653
-  _globals['_READFROMURLREQUEST']._serialized_start=655
-  _globals['_READFROMURLREQUEST']._serialized_end=767
-  _globals['_IMAGE']._serialized_start=769
-  _globals['_IMAGE']._serialized_end=874
-  _globals['_CHUNK']._serialized_start=876
-  _globals['_CHUNK']._serialized_end=975
-  _globals['_READRESPONSE']._serialized_start=977
-  _globals['_READRESPONSE']._serialized_end=1040
-  _globals['_DOCREADER']._serialized_start=1116
-  _globals['_DOCREADER']._serialized_end=1275
+  _globals['_COMPARESPLITTERSREQUEST']._serialized_start=507
+  _globals['_COMPARESPLITTERSREQUEST']._serialized_end=589
+  _globals['_SPLITTERRESULT']._serialized_start=591
+  _globals['_SPLITTERRESULT']._serialized_end=710
+  _globals['_COMPARESPLITTERSRESPONSE']._serialized_start=712
+  _globals['_COMPARESPLITTERSRESPONSE']._serialized_end=797
+  _globals['_READFROMFILEREQUEST']._serialized_start=800
+  _globals['_READFROMFILEREQUEST']._serialized_end=945
+  _globals['_READFROMURLREQUEST']._serialized_start=947
+  _globals['_READFROMURLREQUEST']._serialized_end=1059
+  _globals['_IMAGE']._serialized_start=1061
+  _globals['_IMAGE']._serialized_end=1166
+  _globals['_CHUNK']._serialized_start=1168
+  _globals['_CHUNK']._serialized_end=1267
+  _globals['_READRESPONSE']._serialized_start=1269
+  _globals['_READRESPONSE']._serialized_end=1332
+  _globals['_DOCREADER']._serialized_start=1408
+  _globals['_DOCREADER']._serialized_end=1662
 # @@protoc_insertion_point(module_scope)

@@ -8,6 +8,7 @@ import {
   getKnowledgeDetails,
   delKnowledgeDetails,
   getKnowledgeDetailsCon,
+  reparseKnowledge,
 } from "@/api/knowledge-base/index";
 import { knowledgeStore } from "@/stores/knowledge";
 import { useUIStore } from "@/stores/ui";
@@ -83,6 +84,28 @@ export default function (knowledgeBaseId?: string) {
       })
       .catch(() => {
         MessagePlugin.error("知识删除失败！");
+        return false;
+      });
+  };
+
+  const reparseKnowledgeItem = (index: number, item: any) => {
+    cardList.value[index].isMore = false;
+    moreIndex.value = -1;
+    return reparseKnowledge(item.id)
+      .then((result: any) => {
+        if (result.success) {
+          MessagePlugin.info("已触发重新解析");
+          if (cardList.value[index]) {
+            cardList.value[index].parse_status = 'pending';
+          }
+          return true;
+        } else {
+          MessagePlugin.error(result.message || "重新解析失败");
+          return false;
+        }
+      })
+      .catch((err: any) => {
+        MessagePlugin.error(err.message || "重新解析请求失败");
         return false;
       });
   };
@@ -188,6 +211,7 @@ export default function (knowledgeBaseId?: string) {
     getKnowled,
     details,
     delKnowledge,
+    reparseKnowledgeItem,
     openMore,
     onVisibleChange,
     requestMethod,

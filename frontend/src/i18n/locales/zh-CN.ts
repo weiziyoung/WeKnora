@@ -185,6 +185,7 @@ export default {
     draft: "草稿",
     draftTip: "暂存内容，未参与检索",
     untitledDocument: "未命名文档",
+    reparseDocument: "重新解析文档",
     deleteDocument: "删除文档",
     parsingFailed: "解析失败",
     parsingInProgress: "解析中...",

@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
+	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/models/utils"
 	"github.com/panjf2000/ants/v2"
 )
@@ -40,6 +42,54 @@ func (e *batchEmbedder) BatchEmbedWithPool(ctx context.Context, model Embedder, 
 		return &textEmbedding{text: text}
 	})
 
+	// Recursive function to handle 413 errors by splitting
+	var embedRecursive func(ctx context.Context, chunkTexts []*textEmbedding) ([][]float32, error)
+	embedRecursive = func(ctx context.Context, chunkTexts []*textEmbedding) ([][]float32, error) {
+		if len(chunkTexts) == 0 {
+			return nil, nil
+		}
+
+		// Extract strings
+		textStrings := utils.MapSlice(chunkTexts, func(text *textEmbedding) string {
+			return text.text
+		})
+
+		// Try to embed
+		embeddings, err := model.BatchEmbed(ctx, textStrings)
+		if err == nil {
+			return embeddings, nil
+		}
+
+		// Check for 413 error
+		// "EmbedBatch API error: Http Status %s"
+		if strings.Contains(err.Error(), "413") || strings.Contains(err.Error(), "Request Entity Too Large") {
+			if len(chunkTexts) <= 1 {
+				logger.GetLogger(ctx).Warnf("BatchEmbed failed with 413, cannot split further (batch size=1). Text length: %d", len(textStrings[0]))
+				return nil, err
+			}
+
+			logger.GetLogger(ctx).Warnf("BatchEmbed failed with 413, splitting batch of size %d into two", len(chunkTexts))
+
+			mid := len(chunkTexts) / 2
+			leftChunk := chunkTexts[:mid]
+			rightChunk := chunkTexts[mid:]
+
+			leftEmbeddings, errLeft := embedRecursive(ctx, leftChunk)
+			if errLeft != nil {
+				return nil, errLeft
+			}
+
+			rightEmbeddings, errRight := embedRecursive(ctx, rightChunk)
+			if errRight != nil {
+				return nil, errRight
+			}
+
+			return append(leftEmbeddings, rightEmbeddings...), nil
+		}
+
+		return nil, err
+	}
+
 	// Function to process each document chunk
 	processChunk := func(texts []*textEmbedding) func() {
 		return func() {
@@ -49,9 +99,7 @@ func (e *batchEmbedder) BatchEmbedWithPool(ctx context.Context, model Embedder, 
 				return
 			}
 			// Embed text
-			embedding, err := model.BatchEmbed(ctx, utils.MapSlice(texts, func(text *textEmbedding) string {
-				return text.text
-			}))
+			embedding, err := embedRecursive(ctx, texts)
 			if err != nil {
 				mu.Lock()
 				if firstErr == nil {

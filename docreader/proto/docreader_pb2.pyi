@@ -62,6 +62,36 @@ class ReadConfig(_message.Message):
     vlm_config: VLMConfig
     def __init__(self, chunk_size: _Optional[int] = ..., chunk_overlap: _Optional[int] = ..., separators: _Optional[_Iterable[str]] = ..., enable_multimodal: bool = ..., storage_config: _Optional[_Union[StorageConfig, _Mapping]] = ..., vlm_config: _Optional[_Union[VLMConfig, _Mapping]] = ...) -> None: ...
 
+class CompareSplittersRequest(_message.Message):
+    __slots__ = ("text", "chunk_size", "chunk_overlap")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    CHUNK_SIZE_FIELD_NUMBER: _ClassVar[int]
+    CHUNK_OVERLAP_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    chunk_size: int
+    chunk_overlap: int
+    def __init__(self, text: _Optional[str] = ..., chunk_size: _Optional[int] = ..., chunk_overlap: _Optional[int] = ...) -> None: ...
+
+class SplitterResult(_message.Message):
+    __slots__ = ("splitter_name", "chunks", "total_chunks", "execution_time")
+    SPLITTER_NAME_FIELD_NUMBER: _ClassVar[int]
+    CHUNKS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_CHUNKS_FIELD_NUMBER: _ClassVar[int]
+    EXECUTION_TIME_FIELD_NUMBER: _ClassVar[int]
+    splitter_name: str
+    chunks: _containers.RepeatedCompositeFieldContainer[Chunk]
+    total_chunks: int
+    execution_time: float
+    def __init__(self, splitter_name: _Optional[str] = ..., chunks: _Optional[_Iterable[_Union[Chunk, _Mapping]]] = ..., total_chunks: _Optional[int] = ..., execution_time: _Optional[float] = ...) -> None: ...
+
+class CompareSplittersResponse(_message.Message):
+    __slots__ = ("results", "error")
+    RESULTS_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    results: _containers.RepeatedCompositeFieldContainer[SplitterResult]
+    error: str
+    def __init__(self, results: _Optional[_Iterable[_Union[SplitterResult, _Mapping]]] = ..., error: _Optional[str] = ...) -> None: ...
+
 class ReadFromFileRequest(_message.Message):
     __slots__ = ("file_content", "file_name", "file_type", "read_config", "request_id")
     FILE_CONTENT_FIELD_NUMBER: _ClassVar[int]

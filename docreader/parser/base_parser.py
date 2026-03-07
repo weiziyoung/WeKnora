@@ -865,13 +865,18 @@ class BaseParser(ABC):
         # Check if image is already in the image_map
         for img_url in url_to_info_map.keys():
             if image_map and img_url in image_map:
-                logger.info(
-                    f"Image already in image_map: {img_url}, using cached object"
-                )
-                image = Image.open(
-                    io.BytesIO(endecode.encode_image(image_map[img_url]))
-                )
-                results.append((img_url, img_url, image))
+                try:
+                    logger.info(
+                        f"Image already in image_map: {img_url}, using cached object"
+                    )
+                    image = Image.open(
+                        io.BytesIO(endecode.encode_image(image_map[img_url]))
+                    )
+                    results.append((img_url, img_url, image))
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to process cached image {img_url}: {str(e)}"
+                    )
             else:
                 download_task = self.download_and_upload_image(img_url)
                 download_tasks.append(download_task)

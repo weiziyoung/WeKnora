@@ -184,6 +184,7 @@ export default {
     draft: 'Draft',
     draftTip: 'Temporarily saved and not included in retrieval',
     untitledDocument: 'Untitled Document',
+    reparseDocument: 'Re-parse Document',
     deleteDocument: 'Delete Document',
     parsingFailed: 'Parsing failed',
     parsingInProgress: 'Parsing...',
