@@ -41,6 +41,14 @@ const uploading = ref(false);
 const kbLoading = ref(false);
 const isFAQ = computed(() => (kbInfo.value?.type || '') === 'faq');
 
+// Upload Progress State
+const uploadProgressVisible = ref(false);
+const uploadProgress = ref(0);
+const currentUploadFile = ref('');
+const uploadTotalFiles = ref(0);
+const uploadCompletedFiles = ref(0);
+const uploadSpeed = ref('');
+
 // Permission control: check if current user owns this KB or has edit/manage permission
 const isOwner = computed(() => {
   if (!kbInfo.value) return false;
@@ -564,6 +572,37 @@ const handleOpenURLImportDialog = (event: CustomEvent) => {
   }
 };
 
+// Drag and drop progress event handlers
+const handleFileUploadStart = (e: Event) => {
+  const detail = (e as CustomEvent).detail;
+  if (detail?.kbId !== kbId.value) return;
+  uploadProgressVisible.value = true;
+  currentUploadFile.value = detail?.fileName || '文件';
+  uploadTotalFiles.value = 1;
+  uploadCompletedFiles.value = 0;
+  uploadProgress.value = 0;
+  uploadSpeed.value = '';
+};
+
+const handleFileUploadProgress = (e: Event) => {
+  const detail = (e as CustomEvent).detail;
+  if (detail?.kbId !== kbId.value) return;
+  if (detail?.total) {
+    const percent = Math.round((detail.loaded * 100) / detail.total);
+    uploadProgress.value = percent;
+  }
+};
+
+const handleFileUploadEnd = (e: Event) => {
+  const detail = (e as CustomEvent).detail;
+  if (detail?.kbId !== kbId.value) return;
+  uploadCompletedFiles.value = 1;
+  uploadProgress.value = 100;
+  setTimeout(() => {
+    uploadProgressVisible.value = false;
+  }, 1000);
+};
+
 onMounted(() => {
   loadKnowledgeBaseInfo(kbId.value);
   loadKnowledgeList();
@@ -574,11 +613,20 @@ onMounted(() => {
   window.addEventListener('knowledgeFileUploaded', handleFileUploaded as EventListener);
   // 监听URL导入对话框打开事件
   window.addEventListener('openURLImportDialog', handleOpenURLImportDialog as EventListener);
+  
+  // Drag and drop progress listeners
+  window.addEventListener('knowledgeFileUploadStart', handleFileUploadStart);
+  window.addEventListener('knowledgeFileUploadProgress', handleFileUploadProgress);
+  window.addEventListener('knowledgeFileUploadEnd', handleFileUploadEnd);
 });
 
 onUnmounted(() => {
   window.removeEventListener('knowledgeFileUploaded', handleFileUploaded as EventListener);
   window.removeEventListener('openURLImportDialog', handleOpenURLImportDialog as EventListener);
+  
+  window.removeEventListener('knowledgeFileUploadStart', handleFileUploadStart);
+  window.removeEventListener('knowledgeFileUploadProgress', handleFileUploadProgress);
+  window.removeEventListener('knowledgeFileUploadEnd', handleFileUploadEnd);
 });
 watch(() => cardList.value, (newValue) => {
   if (isFAQ.value) return;
@@ -807,23 +855,51 @@ const handleDocumentUpload = async (event: Event) => {
   // 获取当前选中的分类ID（如果不是"未分类"则传递）
   const tagIdToUpload = selectedTagId.value !== '__untagged__' ? selectedTagId.value : undefined;
 
-  let msgPromise: Promise<any> | null = null;
-  if (totalCount === 1) {
-    msgPromise = MessagePlugin.loading(`正在上传文件 ${validFiles[0].name}...`, 0);
-  } else {
-    msgPromise = MessagePlugin.loading(`正在上传 ${totalCount} 个文件...`, 0);
-  }
+  // Initialize progress UI
+  uploadProgressVisible.value = true;
+  uploadTotalFiles.value = totalCount;
+  uploadCompletedFiles.value = 0;
+  uploadProgress.value = 0;
+  uploadSpeed.value = '';
 
   for (let i = 0; i < totalCount; i++) {
     const file = validFiles[i];
-    try {
-      // 如果是多文件上传，更新进度提示
-      if (totalCount > 1 && msgPromise) {
-         // 注意：MessagePlugin.loading 返回的是 Promise，不能直接更新内容。这里简单起见，保持初始提示。
-         // 如果需要动态更新，可以使用 MessagePlugin.config 或重新调用 loading
-      }
+    currentUploadFile.value = file.name;
+    uploadProgress.value = 0;
+    
+    // Variables for speed calculation
+    let lastLoaded = 0;
+    let lastTime = Date.now();
 
-      const responseData: any = await uploadKnowledgeFile(kbId.value, { file, tag_id: tagIdToUpload });
+    try {
+      const responseData: any = await uploadKnowledgeFile(
+        kbId.value, 
+        { file, tag_id: tagIdToUpload },
+        (progressEvent: any) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            uploadProgress.value = percent;
+            
+            // Calculate speed
+            const now = Date.now();
+            const diffTime = now - lastTime;
+            if (diffTime > 500) { // Update speed every 500ms
+              const diffLoaded = progressEvent.loaded - lastLoaded;
+              const speed = diffLoaded / (diffTime / 1000); // bytes per second
+              
+              if (speed > 1024 * 1024) {
+                uploadSpeed.value = `${(speed / (1024 * 1024)).toFixed(2)} MB/s`;
+              } else {
+                uploadSpeed.value = `${(speed / 1024).toFixed(2)} KB/s`;
+              }
+              
+              lastLoaded = progressEvent.loaded;
+              lastTime = now;
+            }
+          }
+        }
+      );
+
       const isSuccess = responseData?.success || responseData?.code === 200 || responseData?.status === 'success' || (!responseData?.error && responseData);
       if (isSuccess) {
         successCount++;
@@ -838,11 +914,7 @@ const handleDocumentUpload = async (event: Event) => {
         if (responseData?.code === 'duplicate_file' || responseData?.error?.code === 'duplicate_file') {
           errorMessage = "文件已存在";
         }
-        if (totalCount === 1) {
-          if (msgPromise) MessagePlugin.close(msgPromise);
-          msgPromise = null;
-          MessagePlugin.error(errorMessage);
-        }
+        MessagePlugin.error(`${file.name}: ${errorMessage}`);
       }
     } catch (error: any) {
       failCount++;
@@ -850,17 +922,16 @@ const handleDocumentUpload = async (event: Event) => {
       if (error?.code === 'duplicate_file') {
         errorMessage = "文件已存在";
       }
-      if (totalCount === 1) {
-        if (msgPromise) MessagePlugin.close(msgPromise);
-        msgPromise = null;
-        MessagePlugin.error(errorMessage);
-      }
+      MessagePlugin.error(`${file.name}: ${errorMessage}`);
     }
+    
+    uploadCompletedFiles.value++;
   }
 
-  if (msgPromise) {
-    MessagePlugin.close(msgPromise);
-  }
+  // Close progress dialog after short delay
+  setTimeout(() => {
+    uploadProgressVisible.value = false;
+  }, 1000);
 
   // 显示上传结果
   if (successCount > 0) {
@@ -940,7 +1011,12 @@ const handleFolderUpload = async (event: Event) => {
     return;
   }
 
-  const msgPromise = MessagePlugin.loading(t('knowledgeBase.uploadingFolder', { total: validFiles.length }), 0);
+  // Initialize progress UI
+  uploadProgressVisible.value = true;
+  uploadTotalFiles.value = validFiles.length;
+  uploadCompletedFiles.value = 0;
+  uploadProgress.value = 0;
+  uploadSpeed.value = '';
 
   // 批量上传
   let successCount = 0;
@@ -957,16 +1033,55 @@ const handleFolderUpload = async (event: Event) => {
         fileName = `${subPath}/${file.name}`;
       }
     }
+    
+    currentUploadFile.value = fileName;
+    uploadProgress.value = 0;
+    
+    // Variables for speed calculation
+    let lastLoaded = 0;
+    let lastTime = Date.now();
 
     try {
-      await uploadKnowledgeFile(kbId.value, { file, fileName, tag_id: tagIdToUpload });
+      await uploadKnowledgeFile(
+        kbId.value, 
+        { file, fileName, tag_id: tagIdToUpload },
+        (progressEvent: any) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            uploadProgress.value = percent;
+            
+            // Calculate speed
+            const now = Date.now();
+            const diffTime = now - lastTime;
+            if (diffTime > 500) { // Update speed every 500ms
+              const diffLoaded = progressEvent.loaded - lastLoaded;
+              const speed = diffLoaded / (diffTime / 1000); // bytes per second
+              
+              if (speed > 1024 * 1024) {
+                uploadSpeed.value = `${(speed / (1024 * 1024)).toFixed(2)} MB/s`;
+              } else {
+                uploadSpeed.value = `${(speed / 1024).toFixed(2)} KB/s`;
+              }
+              
+              lastLoaded = progressEvent.loaded;
+              lastTime = now;
+            }
+          }
+        }
+      );
       successCount++;
     } catch (error: any) {
       failCount++;
+      MessagePlugin.error(`${fileName}: ${error?.message || '上传失败'}`);
     }
+    
+    uploadCompletedFiles.value++;
   }
   
-  MessagePlugin.close(msgPromise);
+  // Close progress dialog after short delay
+  setTimeout(() => {
+    uploadProgressVisible.value = false;
+  }, 1000);
 
   if (successCount > 0) {
     window.dispatchEvent(new CustomEvent('knowledgeFileUploaded', {
@@ -1231,7 +1346,8 @@ async function createNewSession(value: string): Promise<void> {
                       {{ $t('knowledgeBase.accessInfo.fromOrg') }}「{{ currentSharedKb.org_name }}」
                       {{ $t('knowledgeBase.accessInfo.sharedAt') }} {{ formatStringDate(new Date(currentSharedKb.shared_at)) }}
                     </span>
-                  </template>
+                    <!-- 文件上传进度弹窗 -->
+</template>
                   <template v-else-if="effectiveKBPermission">
                     <span class="kb-access-meta-sep">·</span>
                     <span class="kb-access-meta-text">{{ $t('knowledgeList.detail.sourceTypeAgent') }}</span>
@@ -1710,6 +1826,29 @@ async function createNewSession(value: string): Promise<void> {
     @update:visible="(val) => val ? null : uiStore.closeKBEditor()"
     @success="handleKBEditorSuccess"
   />
+
+  <!-- 文件上传进度弹窗 -->
+  <t-dialog
+    v-model:visible="uploadProgressVisible"
+    :header="$t('knowledgeBase.uploadingTitle') || '正在上传'"
+    :footer="false"
+    :close-on-overlay-click="false"
+    :close-on-esc-keydown="false"
+    width="400px"
+  >
+    <div class="upload-progress-container">
+      <div class="upload-info">
+        <div class="file-name">{{ currentUploadFile }}</div>
+        <div class="progress-text">{{ uploadCompletedFiles }} / {{ uploadTotalFiles }}</div>
+      </div>
+      <t-progress 
+        theme="line" 
+        :percentage="uploadProgress" 
+        :status="uploadProgress === 100 ? 'success' : 'active'"
+      />
+      <div class="upload-speed" v-if="uploadSpeed">{{ uploadSpeed }}</div>
+    </div>
+  </t-dialog>
 </template>
 <style>
 .card-more {
@@ -3006,5 +3145,31 @@ async function createNewSession(value: string): Promise<void> {
 
 .del-card {
   vertical-align: middle;
+}
+
+.upload-progress-container {
+  padding: 16px 0;
+}
+.upload-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--td-text-color-primary);
+}
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
+}
+.progress-text {
+  color: var(--td-text-color-secondary);
+}
+.upload-speed {
+  margin-top: 8px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--td-text-color-secondary);
 }
 </style>

@@ -9,7 +9,7 @@ const BASE_URL = import.meta.env.VITE_IS_DOCKER ? "" : "http://localhost:8080";
 // 创建Axios实例
 const instance = axios.create({
   baseURL: BASE_URL, // 使用配置的API基础URL
-  timeout: 30000, // 请求超时时间
+  timeout: 300000, // 请求超时时间 300s
   headers: {
     "Content-Type": "application/json",
     "X-Request-ID": `${generateRandomString(12)}`,
@@ -201,13 +201,14 @@ export async function getDown(url: string) {
   return res
 }
 
-export function postUpload(url: string, data = {}, onUploadProgress?: (progressEvent: any) => void) {
+export function postUpload(url: string, data = {}, onUploadProgress?: (progressEvent: any) => void, config?: any) {
   return instance.post(url, data, {
     headers: {
       "Content-Type": "multipart/form-data",
       "X-Request-ID": `${generateRandomString(12)}`,
     },
     onUploadProgress,
+    ...config,
   });
 }
 

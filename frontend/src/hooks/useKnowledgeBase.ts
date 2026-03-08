@@ -147,9 +147,30 @@ export default function (knowledgeBaseId?: string) {
     
     const msgPromise = MessagePlugin.loading(`正在上传文件 ${file.name}...`, 0);
     
-    uploadKnowledgeFile(currentKbId, { file, tag_id: tagIdToUpload })
+    // Emit start event for progress tracking
+    window.dispatchEvent(new CustomEvent('knowledgeFileUploadStart', {
+        detail: { fileName: file.name, kbId: currentKbId }
+    }));
+
+    uploadKnowledgeFile(currentKbId, { file, tag_id: tagIdToUpload }, (progressEvent: any) => {
+        // Emit progress event
+        window.dispatchEvent(new CustomEvent('knowledgeFileUploadProgress', {
+            detail: { 
+                fileName: file.name, 
+                loaded: progressEvent.loaded, 
+                total: progressEvent.total,
+                kbId: currentKbId 
+            }
+        }));
+    })
       .then((result: any) => {
         MessagePlugin.close(msgPromise);
+        
+        // Emit end event
+        window.dispatchEvent(new CustomEvent('knowledgeFileUploadEnd', {
+             detail: { fileName: file.name, success: true, kbId: currentKbId }
+        }));
+
         if (result.success) {
           MessagePlugin.success(`文件 ${file.name} 上传成功！`);
           // 触发文件上传完成事件，以便其他组件（如 KnowledgeBase.vue）可以刷新列表

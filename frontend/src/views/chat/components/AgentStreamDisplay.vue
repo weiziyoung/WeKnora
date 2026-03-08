@@ -221,7 +221,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import ToolResultRenderer from './ToolResultRenderer.vue';
 import picturePreview from '@/components/picture-preview.vue';
-import { getChunkByIdOnly } from '@/api/knowledge-base';
+import { getChunkByIdOnly, downKnowledgeDetails } from '@/api/knowledge-base';
 import { processContentUrls } from '@/utils/url';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useUIStore } from '@/stores/ui';
@@ -938,6 +938,68 @@ const onHoverOut = (e: Event) => {
   scheduleFloatClose();
 };
 
+// Handle clicking on a document reference to download/open it
+const handleDocClick = async (kbId: string, title: string) => {
+  if (!kbId) {
+    MessagePlugin.warning(t('chat.cannotFindFileId') || '无法找到对应的文件ID');
+    return;
+  }
+
+  try {
+    const loading = MessagePlugin.loading(t('chat.openingFile') || '正在打开文件...');
+    const response: any = await downKnowledgeDetails(kbId);
+    
+    // Check if response is Blob
+    if (response instanceof Blob) {
+      let blob = response;
+      // Try to detect MIME type from filename for better preview support
+      const filename = title || '';
+      const ext = filename.split('.').pop()?.toLowerCase();
+      const mimeMap: Record<string, string> = {
+        'pdf': 'application/pdf',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'txt': 'text/plain',
+        'html': 'text/html',
+        'htm': 'text/html',
+        'json': 'application/json',
+        'md': 'text/markdown',
+        'svg': 'image/svg+xml'
+      };
+      const mimeType = ext ? mimeMap[ext] : undefined;
+      if (mimeType) {
+        blob = new Blob([response], { type: mimeType });
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Clean up URL object after a delay
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+    } else {
+      // Handle error response (sometimes error is returned as JSON but axios treats as blob)
+      // Check if it's a JSON blob
+      // @ts-ignore
+      if (response.type === 'application/json') {
+        // @ts-ignore
+        const text = await response.text();
+        const json = JSON.parse(text);
+        throw new Error(json.message || '文件打开失败');
+      }
+      // Should be unreachable if interceptor handles it, but safety first
+      throw new Error('文件打开失败');
+    }
+    MessagePlugin.close(loading);
+  } catch (error: any) {
+    console.error('Failed to open file:', error);
+    MessagePlugin.closeAll();
+    MessagePlugin.error(error.message || '文件打开失败');
+  }
+};
+
 const onRootClick = (e: Event) => {
   const target = e.target as HTMLElement;
   if (!target) return;
@@ -964,19 +1026,54 @@ const onRootClick = (e: Event) => {
     return;
   }
   
-  // Handle KB citation clicks -> navigate to KB detail page
+  // Handle KB citation clicks -> open original file
   const kbEl = target.closest?.('.citation-kb') as HTMLElement | null;
-  if (kbEl && kbEl.getAttribute('data-kb-id')) {
+  // Also check if user clicked on citation-text or citation-icon which are children of citation-kb
+  // but closest should handle that.
+  
+  if (kbEl) {
+    // Prevent default immediately to avoid any conflict
     e.preventDefault();
     e.stopPropagation();
+
     const kbId = kbEl.getAttribute('data-kb-id');
-    if (kbId) {
-      try {
-        // Navigate to knowledge base detail page
-        router.push(`/platform/knowledge-bases/${kbId}`);
-      } catch (error) {
-        console.error('Failed to navigate to knowledge base:', error);
-      }
+    const chunkId = kbEl.getAttribute('data-chunk-id');
+    const docTitle = kbEl.getAttribute('data-doc') || '';
+    
+    // If we have chunkId, try to resolve real knowledge_id (file ID)
+    if (chunkId) {
+      // Show loading
+      const loading = MessagePlugin.loading(t('chat.openingFile') || '正在打开文件...');
+      
+      getChunkByIdOnly(chunkId)
+        .then((res: any) => {
+          // The response structure might vary, adjust based on actual API
+          // Assuming res.data.knowledge_id or res.knowledge_id
+          const fileId = res?.data?.knowledge_id || res?.knowledge_id || res?.data?.file_id || res?.file_id;
+          
+          if (fileId) {
+            MessagePlugin.close(loading);
+            handleDocClick(fileId, docTitle);
+          } else {
+            // Fallback: if we can't find fileId, try using kbId directly (though unlikely to work if it's a KB ID)
+            console.warn('Could not resolve file_id from chunk, trying kbId as fallback');
+            MessagePlugin.close(loading);
+            if (kbId) {
+              handleDocClick(kbId, docTitle);
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to resolve chunk details:', err);
+          MessagePlugin.close(loading);
+          // Fallback on error
+          if (kbId) {
+            handleDocClick(kbId, docTitle);
+          }
+        });
+    } else if (kbId) {
+      // No chunkId, try kbId directly
+      handleDocClick(kbId, docTitle);
     }
     return;
   }
@@ -1003,18 +1100,37 @@ const onRootKeydown = (e: KeyboardEvent) => {
     return;
   }
   
-  // Handle KB citation keyboard -> navigate to KB detail
+  // Handle KB citation keyboard -> open original file
   const kbEl = target.closest?.('.citation-kb') as HTMLElement | null;
   if (kbEl) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       const kbId = kbEl.getAttribute('data-kb-id');
-      if (kbId) {
-        try {
-          router.push(`/platform/knowledge-bases/${kbId}`);
-        } catch (error) {
-          console.error('Failed to navigate to knowledge base:', error);
-        }
+      const chunkId = kbEl.getAttribute('data-chunk-id');
+      const docTitle = kbEl.getAttribute('data-doc') || '';
+      
+      if (chunkId) {
+        // Show loading
+        const loading = MessagePlugin.loading(t('chat.openingFile') || '正在打开文件...');
+        
+        getChunkByIdOnly(chunkId)
+          .then((res: any) => {
+            const fileId = res?.data?.knowledge_id || res?.knowledge_id || res?.data?.file_id || res?.file_id;
+            
+            if (fileId) {
+              MessagePlugin.close(loading);
+              handleDocClick(fileId, docTitle);
+            } else {
+              MessagePlugin.close(loading);
+              if (kbId) handleDocClick(kbId, docTitle);
+            }
+          })
+          .catch(() => {
+            MessagePlugin.close(loading);
+            if (kbId) handleDocClick(kbId, docTitle);
+          });
+      } else if (kbId) {
+        handleDocClick(kbId, docTitle);
       }
     }
     return;

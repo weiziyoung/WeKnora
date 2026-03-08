@@ -52,7 +52,8 @@ export function uploadKnowledgeFile(kbId: string, data: { file: File; tag_id?: s
   Object.keys(data).forEach(key => {
     if (data[key] !== undefined) formData.append(key, data[key]);
   });
-  return postUpload(`/api/v1/knowledge-bases/${kbId}/knowledge/file`, formData, onProgress);
+  // Set timeout to 10 minutes (600000ms) for large file uploads
+  return postUpload(`/api/v1/knowledge-bases/${kbId}/knowledge/file`, formData, onProgress, { timeout: 600000 });
 }
 
 // 从URL创建知识
