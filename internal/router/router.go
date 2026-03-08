@@ -142,6 +142,8 @@ func RegisterERPRoutes(r *gin.RouterGroup, handler *erp.Handler) {
 		e.GET("/documents", handler.GetDocuments)
 		e.GET("/logs", handler.GetLogs)
 		e.GET("/failures", handler.GetFailureStats)
+		e.POST("/failures/retry", handler.BatchRetryFailures)
+		e.POST("/failures/delete", handler.BatchDeleteFailures)
 	}
 }
 
