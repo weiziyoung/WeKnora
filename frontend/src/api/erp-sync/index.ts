@@ -131,3 +131,20 @@ export const getFailureStats = async (): Promise<FailureStatsResponse> => {
   const { data } = await erpSyncApi.get('/failures');
   return data;
 };
+
+export interface BatchOperationResponse {
+  success: boolean;
+  total: number;
+  success_count: number;
+  fail_count: number;
+}
+
+export const batchRetryFailures = async (reason: string): Promise<BatchOperationResponse> => {
+  const { data } = await erpSyncApi.post('/failures/retry', { reason });
+  return data;
+};
+
+export const batchDeleteFailures = async (reason: string): Promise<BatchOperationResponse> => {
+  const { data } = await erpSyncApi.post('/failures/delete', { reason });
+  return data;
+};

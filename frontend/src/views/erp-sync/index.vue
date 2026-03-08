@@ -62,7 +62,6 @@
 
       <t-tab-panel value="failures" label="失败汇总">
         <div class="tab-content">
-          <t-button theme="primary" class="mb-2" @click="fetchFailures">刷新</t-button>
           <t-table
             :data="failureStats"
             :columns="failureColumns"
@@ -70,6 +69,12 @@
             :loading="failuresLoading"
             :pagination="null"
           >
+            <template #op="{ row }">
+              <t-space>
+                <t-button theme="primary" variant="text" size="small" @click="handleBatchRetry(row)">批量重试</t-button>
+                <t-button theme="danger" variant="text" size="small" @click="handleBatchDelete(row)">批量删除</t-button>
+              </t-space>
+            </template>
           </t-table>
         </div>
       </t-tab-panel>
@@ -148,9 +153,11 @@ import {
   type RecentRun,
   type DocumentItem,
   type LogItem,
-  type FailureStat
+  type FailureStat,
+  batchRetryFailures,
+  batchDeleteFailures
 } from '@/api/erp-sync';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next';
 
 // State
 const activeTab = ref('dashboard');
@@ -211,8 +218,44 @@ const failColumns = [
 
 const failureColumns = [
   { colKey: 'reason', title: '失败原因', ellipsis: true },
-  { colKey: 'count', title: '数量', width: 100 }
+  { colKey: 'count', title: '数量', width: 100 },
+  { colKey: 'op', title: '操作', width: 200, fixed: 'right' }
 ];
+
+const handleBatchRetry = async (row: FailureStat) => {
+  const confirmDia = DialogPlugin.confirm({
+    header: '确认批量重试',
+    body: `确定要重试 ${row.count} 条 "${row.reason}" 失败记录吗？`,
+    onConfirm: async () => {
+      try {
+        confirmDia.hide();
+        const res = await batchRetryFailures(row.reason);
+        MessagePlugin.success(`批量重试成功: 成功 ${res.success_count}, 失败 ${res.fail_count}`);
+        fetchFailures();
+      } catch (e) {
+        MessagePlugin.error('批量重试失败');
+      }
+    }
+  });
+};
+
+const handleBatchDelete = async (row: FailureStat) => {
+  const confirmDia = DialogPlugin.confirm({
+    header: '确认批量删除',
+    body: `确定要删除 ${row.count} 条 "${row.reason}" 失败记录吗？此操作不可恢复。`,
+    theme: 'danger',
+    onConfirm: async () => {
+      try {
+        confirmDia.hide();
+        const res = await batchDeleteFailures(row.reason);
+        MessagePlugin.success(`批量删除成功: 成功 ${res.success_count}, 失败 ${res.fail_count}`);
+        fetchFailures();
+      } catch (e) {
+        MessagePlugin.error('批量删除失败');
+      }
+    }
+  });
+};
 
 const runColumns = [
   { colKey: 'script_name', title: '脚本名称' },
