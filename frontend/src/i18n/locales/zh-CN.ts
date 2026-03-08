@@ -83,6 +83,7 @@ export default {
     uploadSuccess: "文件上传成功！",
     uploadFailed: "文件上传失败！",
     fileExists: "文件已存在",
+    uploadingTitle: "正在上传文件",
     uploadingMultiple: "正在上传 {total} 个文件...",
     uploadAllSuccess: "成功上传 {count} 个文件！",
     uploadPartialSuccess: "上传完成：成功 {success} 个，失败 {fail} 个",

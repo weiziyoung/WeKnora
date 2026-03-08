@@ -145,8 +145,6 @@ export default function (knowledgeBaseId?: string) {
     const uiStore = useUIStore();
     const tagIdToUpload = uiStore.selectedTagId !== '__untagged__' ? uiStore.selectedTagId : undefined;
     
-    const msgPromise = MessagePlugin.loading(`正在上传文件 ${file.name}...`, 0);
-    
     // Emit start event for progress tracking
     window.dispatchEvent(new CustomEvent('knowledgeFileUploadStart', {
         detail: { fileName: file.name, kbId: currentKbId }
@@ -164,8 +162,6 @@ export default function (knowledgeBaseId?: string) {
         }));
     })
       .then((result: any) => {
-        MessagePlugin.close(msgPromise);
-        
         // Emit end event
         window.dispatchEvent(new CustomEvent('knowledgeFileUploadEnd', {
              detail: { fileName: file.name, success: true, kbId: currentKbId }
@@ -188,7 +184,10 @@ export default function (knowledgeBaseId?: string) {
         }
       })
       .catch((err: any) => {
-        MessagePlugin.close(msgPromise);
+        // Emit end event with failure
+        window.dispatchEvent(new CustomEvent('knowledgeFileUploadEnd', {
+             detail: { fileName: file.name, success: false, kbId: currentKbId }
+        }));
         const errorMessage = err.error?.message || err.message || "上传失败！";
         MessagePlugin.error(err.code === 'duplicate_file' ? `文件 ${file.name} 已存在` : errorMessage);
         if (uploadInput && uploadInput.value) {
