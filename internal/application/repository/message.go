@@ -46,6 +46,52 @@ func (r *messageRepository) GetMessage(
 	return &message, nil
 }
 
+// UpdateFeedback updates message feedback
+func (r *messageRepository) UpdateFeedback(
+	ctx context.Context, sessionID, messageID string, feedback *types.Feedback,
+) error {
+	return r.db.WithContext(ctx).Model(&types.Message{}).Where(
+		"id = ? AND session_id = ?", messageID, sessionID,
+	).Update("feedback", feedback).Error
+}
+
+// GetFeedbacks gets messages with feedback (for admin)
+func (r *messageRepository) GetFeedbacks(
+	ctx context.Context, page, pageSize int, rating, userID string,
+) ([]*types.Message, int64, error) {
+	var messages []*types.Message
+	var total int64
+	query := r.db.WithContext(ctx).
+		Model(&types.Message{}).
+		Select("messages.*, COALESCE(user_messages.content, '') AS query, messages.content AS answer").
+		Joins(
+			"LEFT JOIN messages AS user_messages ON user_messages.session_id = messages.session_id AND user_messages.request_id = messages.request_id AND user_messages.role = ?",
+			"user",
+		).
+		Where("messages.feedback IS NOT NULL")
+
+	if rating != "" {
+		// Use JSON path query for postgres/mysql
+		// Assuming Postgres for JSONB
+		query = query.Where("messages.feedback->>'rating' = ?", rating)
+	}
+
+	// Note: UserID filtering requires joining with sessions and then users,
+	// but currently sessions table might not have user_id linked directly if it's tenant-based.
+	// If sessions have user_id, we can join.
+	// For now, we skip user_id filtering implementation details until schema supports it.
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := query.Order("messages.created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&messages).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return messages, total, nil
+}
+
 // GetMessagesBySession retrieves all messages for a session with pagination
 func (r *messageRepository) GetMessagesBySession(
 	ctx context.Context, sessionID string, page int, pageSize int,

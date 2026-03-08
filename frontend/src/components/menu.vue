@@ -100,6 +100,7 @@ const totalPages = computed(() => Math.ceil(total.value / page_size.value));
 const hasMore = computed(() => currentPage.value < totalPages.value);
 type MenuItem = { title: string; icon: string; path: string; childrenPath?: string; children?: any[] };
 const { menuArr } = storeToRefs(usemenuStore);
+const { isAdmin } = storeToRefs(authStore);
 let activeSubmenu = ref<string>('');
 
 // 批量管理状态
@@ -165,6 +166,8 @@ const isMenuItemActive = (itemPath: string): boolean => {
             return currentRoute === 'kbCreatChat' || currentRoute === 'globalCreatChat';
         case 'settings':
             return currentRoute === 'settings';
+        case 'admin/feedbacks':
+            return currentRoute === 'adminFeedbacks';
         default:
             return itemPath === currentpath.value;
     }
@@ -188,9 +191,19 @@ const getIconActiveState = (itemPath: string) => {
 
 // 分离上下两部分菜单
 const topMenuItems = computed<MenuItem[]>(() => {
-    return (menuArr.value as unknown as MenuItem[]).filter((item: MenuItem) => 
+    const items = (menuArr.value as unknown as MenuItem[]).filter((item: MenuItem) => 
         item.path === 'knowledge-bases' || item.path === 'agents' || item.path === 'organizations' || item.path === 'creatChat' || item.path === 'erp-sync'
     );
+    
+    if (isAdmin.value) {
+        items.splice(0, 0, {
+            title: '反馈管理',
+            icon: 'setting',
+            path: 'admin/feedbacks'
+        });
+    }
+    
+    return items;
 });
 
 const bottomMenuItems = computed<MenuItem[]>(() => {

@@ -31,6 +31,12 @@ type MessageService interface {
 
 	// DeleteMessage deletes a message
 	DeleteMessage(ctx context.Context, sessionID string, id string) error
+
+	// UpdateFeedback updates message feedback
+	UpdateFeedback(ctx context.Context, sessionID, messageID string, feedback *types.Feedback) error
+
+	// GetFeedbacks gets messages with feedback (for admin)
+	GetFeedbacks(ctx context.Context, page, pageSize int, rating, userID string) ([]*types.Message, int64, error)
 }
 
 // MessageRepository defines the message repository interface

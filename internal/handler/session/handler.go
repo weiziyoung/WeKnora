@@ -2,6 +2,7 @@ package session
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/errors"
@@ -354,5 +355,105 @@ func (h *Handler) BatchDeleteSessions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Sessions deleted successfully",
+	})
+}
+
+// UpdateFeedback godoc
+// @Summary      更新消息反馈
+// @Description  更新消息的反馈信息
+// @Tags         消息
+// @Accept       json
+// @Produce      json
+// @Param        session_id  path      string          true  "会话ID"
+// @Param        message_id  path      string          true  "消息ID"
+// @Param        request     body      types.Feedback  true  "反馈内容"
+// @Success      200         {object}  map[string]interface{}
+// @Failure      400         {object}  errors.AppError
+// @Security     Bearer
+// @Security     ApiKeyAuth
+// @Router       /messages/{session_id}/{message_id}/feedback [put]
+func (h *Handler) UpdateFeedback(c *gin.Context) {
+	ctx := c.Request.Context()
+	sessionID := c.Param("session_id")
+	messageID := c.Param("message_id")
+
+	var feedback types.Feedback
+	if err := c.ShouldBindJSON(&feedback); err != nil {
+		logger.Error(ctx, "Failed to validate feedback parameters", err)
+		c.Error(errors.NewBadRequestError(err.Error()))
+		return
+	}
+
+	if err := h.messageService.UpdateFeedback(ctx, sessionID, messageID, &feedback); err != nil {
+		logger.ErrorWithFields(ctx, err, nil)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// GetFeedbacks godoc
+// @Summary      获取反馈列表 (Admin)
+// @Description  获取所有消息反馈 (仅管理员)
+// @Tags         管理员
+// @Accept       json
+// @Produce      json
+// @Param        page      query     int     false  "页码" default(1)
+// @Param        page_size query     int     false  "每页数量" default(10)
+// @Param        rating    query     string  false  "评分筛选 (like/dislike)"
+// @Param        user_id   query     string  false  "用户ID筛选"
+// @Success      200       {object}  map[string]interface{}
+// @Failure      403       {object}  errors.AppError
+// @Security     Bearer
+// @Router       /admin/feedbacks [get]
+func (h *Handler) GetFeedbacks(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Check user existence in context (should be set by auth middleware)
+	userVal, exists := c.Get(types.UserContextKey.String())
+	if !exists {
+		c.Error(errors.NewUnauthorizedError("Unauthorized"))
+		return
+	}
+	user, ok := userVal.(*types.User)
+	if !ok {
+		c.Error(errors.NewUnauthorizedError("Invalid user context"))
+		return
+	}
+
+	// Check admin permission
+	if !user.IsAdmin {
+		c.Error(errors.NewForbiddenError("Admin permission required"))
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	rating := c.Query("rating")
+	userID := c.Query("user_id")
+
+	messages, total, err := h.messageService.GetFeedbacks(ctx, page, pageSize, rating, userID)
+	if err != nil {
+		logger.ErrorWithFields(ctx, err, nil)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items": messages,
+		"total": total,
+		"page":  page,
+		"size":  pageSize,
 	})
 }

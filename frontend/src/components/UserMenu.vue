@@ -168,7 +168,7 @@ const loadUserInfo = async () => {
       userInfo.value = {
         username: user.username || t('common.info'),
         email: user.email || 'user@example.com',
-        avatar: user.avatar || ''
+        avatar: user.avatar || '',
       }
       // 同时更新 authStore 中的用户信息，确保包含 can_access_all_tenants 字段
       authStore.setUser({
@@ -179,8 +179,10 @@ const loadUserInfo = async () => {
         tenant_id: user.tenant_id,
         can_access_all_tenants: user.can_access_all_tenants || false,
         created_at: user.created_at,
-        updated_at: user.updated_at
+        updated_at: user.updated_at,
+        is_admin: user.is_admin,
       })
+      console.log("is_admin", user.is_admin)
       // 如果返回了租户信息，也更新租户信息
       if (response.data.tenant) {
         authStore.setTenant({

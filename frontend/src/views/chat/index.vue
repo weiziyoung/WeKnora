@@ -462,6 +462,7 @@ onChunk((data) => {
             existingMessage = {
                 id: data.id,
                 request_id: data.id,
+                session_id: session_id.value,
                 role: 'assistant',
                 content: '',
                 showThink: false,
@@ -514,7 +515,7 @@ onChunk((data) => {
     }
     
     fullContent.value += data.content;
-    let obj = { ...data, content: '', role: 'assistant', showThink: false, is_completed: false };
+    let obj = { ...data, content: '', role: 'assistant', showThink: false, is_completed: false, session_id: session_id.value };
 
     if (fullContent.value.includes('<think>') && !fullContent.value.includes('<\/think>')) {
         obj.thinking = true;
@@ -556,6 +557,7 @@ const handleAgentChunk = (data) => {
         const newMsg = {
             id: data.id,
             request_id: data.id,
+            session_id: session_id.value,
             role: 'assistant',
             content: '',
             isAgentMode: true,
@@ -868,6 +870,9 @@ const updateAssistantSession = (payload) => {
         return item.id === payload.id;
     });
     if (message) {
+        if (!message.session_id) {
+            message.session_id = session_id.value;
+        }
         message.content = payload.content;
         message.thinking = payload.thinking;
         message.thinkContent = payload.thinkContent;
@@ -878,6 +883,9 @@ const updateAssistantSession = (payload) => {
             message.is_completed = true;
         }
     } else {
+        if (!payload.session_id) {
+            payload.session_id = session_id.value;
+        }
         messagesList.push(payload);
     }
     scrollToBottom();

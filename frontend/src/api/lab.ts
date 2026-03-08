@@ -26,5 +26,5 @@ export interface CompareSplittersResponse {
 }
 
 export function compareSplitters(data: CompareSplittersRequest) {
-  return post('/api/v1/lab/splitter/compare', data) as Promise<CompareSplittersResponse>
+  return post('/api/v1/lab/splitter/compare', data).then((res) => res.data as CompareSplittersResponse)
 }

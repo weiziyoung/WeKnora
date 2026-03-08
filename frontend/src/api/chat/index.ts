@@ -55,3 +55,14 @@ export async function getSession(session_id: string) {
 export async function stopSession(session_id: string, message_id: string) {
   return post(`/api/v1/sessions/${session_id}/stop`, { message_id });
 }
+
+export async function updateFeedback(session_id: string, message_id: string, data: any) {
+  return put(`/api/v1/messages/${session_id}/${message_id}/feedback`, data);
+}
+
+export async function getFeedbacks(params: { page: number, page_size: number, rating?: string, user_id?: string }) {
+  let url = `/api/v1/admin/feedbacks?page=${params.page}&page_size=${params.page_size}`;
+  if (params.rating) url += `&rating=${params.rating}`;
+  if (params.user_id) url += `&user_id=${params.user_id}`;
+  return get(url);
+}

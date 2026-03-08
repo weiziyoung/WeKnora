@@ -63,6 +63,27 @@
             <t-button size="small" variant="outline" shape="round" @click.stop="handleAddToKnowledge(event)" :title="$t('agent.addToKnowledgeBase')">
               <t-icon name="add" />
             </t-button>
+            <div class="feedback-divider"></div>
+            <t-button 
+                size="small" 
+                variant="text" 
+                shape="round" 
+                @click.stop="handleLike(event)" 
+                :class="{ 'active-feedback': feedbackStatus[event.event_id] === 'like' }"
+                :title="$t('chat.like')"
+            >
+                <t-icon name="thumb-up" />
+            </t-button>
+            <t-button 
+                size="small" 
+                variant="text" 
+                shape="round" 
+                @click.stop="handleDislike(event)" 
+                :class="{ 'active-feedback': feedbackStatus[event.event_id] === 'dislike' }"
+                :title="$t('chat.dislike')"
+            >
+                <t-icon name="thumb-down" />
+            </t-button>
           </div>
         </div>
         
@@ -212,6 +233,31 @@
   
   <!-- Image Preview -->
   <picturePreview :reviewImg="imagePreviewVisible" :reviewUrl="imagePreviewUrl" @closePreImg="closeImagePreview" />
+
+  <!-- Dislike Reason Modal -->
+  <t-dialog
+      v-model:visible="showDislikeModal"
+      header="对结果不满意的原因"
+      :confirm-btn="{ content: '提交反馈', theme: 'primary' }"
+      :cancel-btn="{ content: '取消' }"
+      @confirm="confirmDislike"
+      width="480px"
+  >
+      <div class="dislike-reasons">
+          <t-radio-group v-model="dislikeReason" direction="vertical">
+              <t-radio v-for="(reason, index) in DISLIKE_REASONS" :key="index" :value="reason">
+                  {{ reason }}
+              </t-radio>
+          </t-radio-group>
+          <div v-if="dislikeReason === '其他'" class="other-reason-input">
+              <t-textarea
+                  v-model="otherReason"
+                  placeholder="欢迎反馈在使用中遇到的任何问题，感谢您的支持"
+                  :autosize="{ minRows: 2, maxRows: 4 }"
+              />
+          </div>
+      </div>
+  </t-dialog>
 </template>
 
 <script setup lang="ts">
@@ -226,10 +272,83 @@ import { processContentUrls } from '@/utils/url';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useUIStore } from '@/stores/ui';
 import { useI18n } from 'vue-i18n';
+import { updateFeedback } from '@/api/chat';
 
 const router = useRouter();
 const uiStore = useUIStore();
 const { t } = useI18n();
+
+// Feedback state
+const feedbackStatus = ref<Record<string, string>>({}); // event_id -> 'like' | 'dislike'
+const showDislikeModal = ref(false);
+const dislikeReason = ref('');
+const otherReason = ref('');
+const currentFeedbackEvent = ref<any>(null);
+
+const DISLIKE_REASONS = [
+    '回答遗漏明明存在的信息',
+    '推荐冗余，我不需要这些信息',
+    '回答存在事实错误，或包含错误信息',
+    '答非所问',
+    '答案对我没有帮助',
+    '其他'
+];
+
+const handleLike = async (event: any) => {
+    // @ts-ignore
+    if (!props.session || !props.session.id) return;
+    
+    try {
+        // Agent mode might have multiple answer events, but we usually feedback on the whole message
+        // Here we use the message ID from session
+        // @ts-ignore
+        await updateFeedback(props.session.session_id, props.session.id, {
+            rating: 'like'
+        });
+        feedbackStatus.value[event.event_id] = 'like';
+        MessagePlugin.success('感谢您的反馈');
+    } catch (err) {
+        console.error('Feedback failed:', err);
+        MessagePlugin.error('反馈提交失败');
+    }
+};
+
+const handleDislike = (event: any) => {
+    currentFeedbackEvent.value = event;
+    showDislikeModal.value = true;
+    dislikeReason.value = '';
+    otherReason.value = '';
+};
+
+const confirmDislike = async () => {
+    if (!dislikeReason.value) {
+        MessagePlugin.warning('请选择不满意的原因');
+        return;
+    }
+
+    // @ts-ignore
+    if (!props.session || !props.session.id) return;
+
+    try {
+        const data = {
+            rating: 'dislike',
+            reason: dislikeReason.value,
+            comment: dislikeReason.value === '其他' ? otherReason.value : ''
+        };
+        // @ts-ignore
+        await updateFeedback(props.session.session_id, props.session.id, data);
+        
+        if (currentFeedbackEvent.value) {
+            feedbackStatus.value[currentFeedbackEvent.value.event_id] = 'dislike';
+        }
+        
+        showDislikeModal.value = false;
+        MessagePlugin.success('感谢您的反馈');
+    } catch (err) {
+        console.error('Feedback failed:', err);
+        MessagePlugin.error('反馈提交失败');
+    }
+};
 
 const TOOL_NAME_I18N: Record<string, string> = {
   search_knowledge: '知识库检索',
@@ -3288,4 +3407,31 @@ const handleAddToKnowledge = (answerEvent: any) => {
   }
 }
 
+.feedback-divider {
+    width: 1px;
+    height: 16px;
+    background-color: #e0e0e0;
+    margin: 0 4px;
+}
+
+.active-feedback {
+    color: #07c05f !important;
+    background: rgba(7, 192, 95, 0.08) !important;
+    
+    .t-icon {
+        color: #07c05f !important;
+    }
+}
+
+.dislike-reasons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0;
+}
+
+.other-reason-input {
+    margin-top: 8px;
+    margin-left: 28px;
+}
 </style>

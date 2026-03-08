@@ -65,6 +65,8 @@ type Message struct {
 	RequestID string `json:"request_id"`
 	// Message text content
 	Content string `json:"content"`
+	Query   string `json:"query,omitempty" gorm:"->;column:query"`
+	Answer  string `json:"answer,omitempty" gorm:"->;column:answer"`
 	// Message role: "user", "assistant", "system"
 	Role string `json:"role"`
 	// References to knowledge chunks used in the response
@@ -76,6 +78,8 @@ type Message struct {
 	// Mentioned knowledge bases and files (for user messages)
 	// Stores the @mentioned items when user sends a message
 	MentionedItems MentionedItems `json:"mentioned_items,omitempty" gorm:"type:jsonb,column:mentioned_items"`
+	// User feedback for the message
+	Feedback Feedback `json:"feedback,omitempty" gorm:"type:jsonb,column:feedback"`
 	// Whether message generation is complete
 	IsCompleted bool `json:"is_completed"`
 	// Message creation timestamp
@@ -89,6 +93,32 @@ type Message struct {
 // AgentSteps represents a collection of agent execution steps
 // Used for storing agent reasoning process in database
 type AgentSteps []AgentStep
+
+// Feedback represents user feedback for a message
+type Feedback struct {
+	Rating  string `json:"rating"` // "like" or "dislike"
+	Reason  string `json:"reason,omitempty"`
+	Comment string `json:"comment,omitempty"`
+}
+
+// Value implements the driver.Valuer interface for database serialization
+func (f Feedback) Value() (driver.Value, error) {
+	return json.Marshal(f)
+}
+
+// Scan implements the sql.Scanner interface for database deserialization
+func (f *Feedback) Scan(value interface{}) error {
+	if value == nil {
+		*f = Feedback{}
+		return nil
+	}
+	b, ok := value.([]byte)
+	if !ok {
+		*f = Feedback{}
+		return nil
+	}
+	return json.Unmarshal(b, f)
+}
 
 // Value implements the driver.Valuer interface for database serialization
 func (a AgentSteps) Value() (driver.Value, error) {

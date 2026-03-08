@@ -310,3 +310,48 @@ func (s *messageService) DeleteMessage(ctx context.Context, sessionID string, me
 	logger.Info(ctx, "Message deleted successfully")
 	return nil
 }
+
+// UpdateFeedback updates message feedback
+func (s *messageService) UpdateFeedback(ctx context.Context, sessionID, messageID string, feedback *types.Feedback) error {
+	logger.Info(ctx, "Start updating message feedback")
+	logger.Infof(ctx, "Updating feedback for message ID: %s, session ID: %s", messageID, sessionID)
+
+	// Verify the session exists before updating feedback
+	tenantID := ctx.Value(types.TenantIDContextKey).(uint64)
+	logger.Infof(ctx, "Checking if session exists, tenant ID: %d", tenantID)
+	_, err := s.sessionRepo.Get(ctx, tenantID, sessionID)
+	if err != nil {
+		logger.Errorf(ctx, "Failed to get session: %v", err)
+		return err
+	}
+
+	// Update the feedback in the repository
+	logger.Info(ctx, "Session exists, updating feedback")
+	err = s.messageRepo.UpdateFeedback(ctx, sessionID, messageID, feedback)
+	if err != nil {
+		logger.ErrorWithFields(ctx, err, map[string]interface{}{
+			"session_id": sessionID,
+			"message_id": messageID,
+		})
+		return err
+	}
+
+	logger.Info(ctx, "Message feedback updated successfully")
+	return nil
+}
+
+// GetFeedbacks gets messages with feedback (for admin)
+func (s *messageService) GetFeedbacks(ctx context.Context, page, pageSize int, rating, userID string) ([]*types.Message, int64, error) {
+	logger.Info(ctx, "Start getting feedbacks")
+	logger.Infof(ctx, "Getting feedbacks, page: %d, pageSize: %d, rating: %s, userID: %s", page, pageSize, rating, userID)
+
+	// Retrieve feedbacks from repository
+	messages, total, err := s.messageRepo.GetFeedbacks(ctx, page, pageSize, rating, userID)
+	if err != nil {
+		logger.Errorf(ctx, "Failed to get feedbacks: %v", err)
+		return nil, 0, err
+	}
+
+	logger.Infof(ctx, "Retrieved %d feedbacks successfully", len(messages))
+	return messages, total, nil
+}

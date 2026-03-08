@@ -24,6 +24,8 @@ type User struct {
 	IsActive bool `json:"is_active"  gorm:"default:true"`
 	// Whether the user can access all tenants (cross-tenant access)
 	CanAccessAllTenants bool `json:"can_access_all_tenants" gorm:"default:false"`
+	// Whether the user is an administrator
+	IsAdmin bool `json:"is_admin" gorm:"default:false"`
 	// Creation time of the user
 	CreatedAt time.Time `json:"created_at"`
 	// Last updated time of the user
@@ -98,6 +100,7 @@ type UserInfo struct {
 	TenantID            uint64    `json:"tenant_id"`
 	IsActive            bool      `json:"is_active"`
 	CanAccessAllTenants bool      `json:"can_access_all_tenants"`
+	IsAdmin             bool      `json:"is_admin"`
 	CreatedAt           time.Time `json:"created_at"`
 	UpdatedAt           time.Time `json:"updated_at"`
 }
@@ -112,6 +115,7 @@ func (u *User) ToUserInfo() *UserInfo {
 		TenantID:            u.TenantID,
 		IsActive:            u.IsActive,
 		CanAccessAllTenants: u.CanAccessAllTenants,
+		IsAdmin:             u.IsAdmin,
 		CreatedAt:           u.CreatedAt,
 		UpdatedAt:           u.UpdatedAt,
 	}

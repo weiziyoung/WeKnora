@@ -101,6 +101,12 @@ const router = createRouter({
           meta: { requiresInit: true, requiresAuth: true }
         },
         {
+          path: "admin/feedbacks",
+          name: "adminFeedbacks",
+          component: () => import("../views/admin/feedbacks.vue"),
+          meta: { requiresInit: true, requiresAuth: true }
+        },
+        {
           path: "lab/splitter",
           name: "SplitterArena",
           component: () => import("../views/lab/SplitterArena.vue"),

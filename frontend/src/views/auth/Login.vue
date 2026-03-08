@@ -608,6 +608,7 @@ const handleLogin = async () => {
             avatar: response.user.avatar,
             tenant_id: String(response.tenant.id) || '',
             can_access_all_tenants: response.user.can_access_all_tenants || false,
+            is_admin: response.user.is_admin || false,
             created_at: response.user.created_at || new Date().toISOString(),
             updated_at: response.user.updated_at || new Date().toISOString()
           })

@@ -302,6 +302,15 @@ func RegisterSessionRoutes(r *gin.RouterGroup, handler *session.Handler) {
 		// 继续接收活跃流
 		sessions.GET("/continue-stream/:session_id", handler.ContinueStream)
 	}
+
+	// Feedback routes
+	r.PUT("/messages/:session_id/:message_id/feedback", handler.UpdateFeedback)
+
+	// Admin routes
+	admin := r.Group("/admin")
+	{
+		admin.GET("/feedbacks", handler.GetFeedbacks)
+	}
 }
 
 // RegisterChatRoutes 注册路由
