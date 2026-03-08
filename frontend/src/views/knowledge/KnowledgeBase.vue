@@ -112,8 +112,8 @@ const tagPage = ref(1);
 const tagHasMore = ref(false);
 const tagLoadingMore = ref(false);
 const tagTotal = ref(0);
-let tagSearchDebounce: ReturnType<typeof setTimeout> | null = null;
-let docSearchDebounce: ReturnType<typeof setTimeout> | null = null;
+let tagSearchDebounce: number | null = null;
+let docSearchDebounce: number | null = null;
 const docSearchKeyword = ref('');
 const selectedFileType = ref('');
 const fileTypeOptions = computed(() => [
@@ -480,8 +480,8 @@ const loadKnowledgeList = async () => {
       }));
     
     // Merge and deduplicate by id (my KBs take precedence)
-    const myKbIds = new Set(myKbs.map(kb => kb.id));
-    const uniqueSharedKbs = sharedKbs.filter(kb => !myKbIds.has(kb.id));
+    const myKbIds = new Set(myKbs.map((kb: any) => kb.id));
+    const uniqueSharedKbs = sharedKbs.filter((kb: any) => !myKbIds.has(kb.id));
     
     knowledgeList.value = [...myKbs, ...uniqueSharedKbs];
   } catch (error) {
@@ -807,8 +807,22 @@ const handleDocumentUpload = async (event: Event) => {
   // 获取当前选中的分类ID（如果不是"未分类"则传递）
   const tagIdToUpload = selectedTagId.value !== '__untagged__' ? selectedTagId.value : undefined;
 
-  for (const file of validFiles) {
+  let msgPromise: Promise<any> | null = null;
+  if (totalCount === 1) {
+    msgPromise = MessagePlugin.loading(`正在上传文件 ${validFiles[0].name}...`, 0);
+  } else {
+    msgPromise = MessagePlugin.loading(`正在上传 ${totalCount} 个文件...`, 0);
+  }
+
+  for (let i = 0; i < totalCount; i++) {
+    const file = validFiles[i];
     try {
+      // 如果是多文件上传，更新进度提示
+      if (totalCount > 1 && msgPromise) {
+         // 注意：MessagePlugin.loading 返回的是 Promise，不能直接更新内容。这里简单起见，保持初始提示。
+         // 如果需要动态更新，可以使用 MessagePlugin.config 或重新调用 loading
+      }
+
       const responseData: any = await uploadKnowledgeFile(kbId.value, { file, tag_id: tagIdToUpload });
       const isSuccess = responseData?.success || responseData?.code === 200 || responseData?.status === 'success' || (!responseData?.error && responseData);
       if (isSuccess) {
@@ -825,6 +839,8 @@ const handleDocumentUpload = async (event: Event) => {
           errorMessage = "文件已存在";
         }
         if (totalCount === 1) {
+          if (msgPromise) MessagePlugin.close(msgPromise);
+          msgPromise = null;
           MessagePlugin.error(errorMessage);
         }
       }
@@ -835,9 +851,15 @@ const handleDocumentUpload = async (event: Event) => {
         errorMessage = "文件已存在";
       }
       if (totalCount === 1) {
+        if (msgPromise) MessagePlugin.close(msgPromise);
+        msgPromise = null;
         MessagePlugin.error(errorMessage);
       }
     }
+  }
+
+  if (msgPromise) {
+    MessagePlugin.close(msgPromise);
   }
 
   // 显示上传结果
@@ -918,7 +940,7 @@ const handleFolderUpload = async (event: Event) => {
     return;
   }
 
-  MessagePlugin.info(t('knowledgeBase.uploadingFolder', { total: validFiles.length }));
+  const msgPromise = MessagePlugin.loading(t('knowledgeBase.uploadingFolder', { total: validFiles.length }), 0);
 
   // 批量上传
   let successCount = 0;
@@ -943,6 +965,8 @@ const handleFolderUpload = async (event: Event) => {
       failCount++;
     }
   }
+  
+  MessagePlugin.close(msgPromise);
 
   if (successCount > 0) {
     window.dispatchEvent(new CustomEvent('knowledgeFileUploaded', {

@@ -145,21 +145,34 @@ export default function (knowledgeBaseId?: string) {
     const uiStore = useUIStore();
     const tagIdToUpload = uiStore.selectedTagId !== '__untagged__' ? uiStore.selectedTagId : undefined;
     
+    const msgPromise = MessagePlugin.loading(`正在上传文件 ${file.name}...`, 0);
+    
     uploadKnowledgeFile(currentKbId, { file, tag_id: tagIdToUpload })
       .then((result: any) => {
+        MessagePlugin.close(msgPromise);
         if (result.success) {
-          MessagePlugin.info("上传成功！");
+          MessagePlugin.success(`文件 ${file.name} 上传成功！`);
+          // 触发文件上传完成事件，以便其他组件（如 KnowledgeBase.vue）可以刷新列表
+          window.dispatchEvent(new CustomEvent('knowledgeFileUploaded', {
+            detail: { kbId: currentKbId }
+          }));
+          // 如果当前就在这个知识库页面，也尝试刷新列表（虽然事件应该能处理）
           getKnowled({ page: 1, page_size: 35 }, currentKbId);
         } else {
           const errorMessage = result.error?.message || result.message || "上传失败！";
-          MessagePlugin.error(result.code === 'duplicate_file' ? "文件已存在" : errorMessage);
+          MessagePlugin.error(result.code === 'duplicate_file' ? `文件 ${file.name} 已存在` : errorMessage);
         }
-        uploadInput.value.value = "";
+        if (uploadInput && uploadInput.value) {
+            uploadInput.value.value = "";
+        }
       })
       .catch((err: any) => {
+        MessagePlugin.close(msgPromise);
         const errorMessage = err.error?.message || err.message || "上传失败！";
-        MessagePlugin.error(err.code === 'duplicate_file' ? "文件已存在" : errorMessage);
-        uploadInput.value.value = "";
+        MessagePlugin.error(err.code === 'duplicate_file' ? `文件 ${file.name} 已存在` : errorMessage);
+        if (uploadInput && uploadInput.value) {
+            uploadInput.value.value = "";
+        }
       });
   };
   const getCardDetails = (item: any) => {
