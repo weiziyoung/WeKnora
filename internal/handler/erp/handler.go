@@ -240,6 +240,7 @@ func (h *Handler) BatchRetryFailures(c *gin.Context) {
 	for _, doc := range docs {
 		if doc.KnowledgeID == "" {
 			logger.Warnf(ctx, "Skipping document with empty KnowledgeID: %s", doc.Filename)
+			failCount++
 			continue
 		}
 
@@ -301,9 +302,18 @@ func (h *Handler) BatchDeleteFailures(c *gin.Context) {
 	knowledgeIDs := make([]string, 0)
 	docIDs := make([]int, 0)
 
+	// Map to track which doc ID corresponds to which KnowledgeID
+	knowledgeIDToDocIDs := make(map[string][]int)
+	// Docs without KnowledgeID (success immediately)
+	successDocIDs := make([]int, 0)
+
 	for _, doc := range docs {
 		if doc.KnowledgeID != "" {
 			knowledgeIDs = append(knowledgeIDs, doc.KnowledgeID)
+			knowledgeIDToDocIDs[doc.KnowledgeID] = append(knowledgeIDToDocIDs[doc.KnowledgeID], doc.ID)
+		} else {
+			successDocIDs = append(successDocIDs, doc.ID)
+			successCount++
 		}
 		docIDs = append(docIDs, doc.ID)
 	}
@@ -312,24 +322,22 @@ func (h *Handler) BatchDeleteFailures(c *gin.Context) {
 	if len(knowledgeIDs) > 0 {
 		if err := h.kgService.DeleteKnowledgeList(ctx, knowledgeIDs); err != nil {
 			logger.Errorf(ctx, "Failed to batch delete knowledge list: %v", err)
-			// Fallback to individual delete if batch fails? Or just report error.
-			// Let's assume batch failure means all failed.
-			failCount = len(knowledgeIDs)
+			// All failed
+			failCount += len(knowledgeIDs)
 		} else {
-			successCount = len(knowledgeIDs)
+			// All success
+			successCount += len(knowledgeIDs)
+			// Add successful doc IDs to successDocIDs for status update
+			for _, kid := range knowledgeIDs {
+				successDocIDs = append(successDocIDs, knowledgeIDToDocIDs[kid]...)
+			}
 		}
 	}
 
-	// Also update or delete DocumentStatus records?
-	// The user asked for "Batch Delete", which implies removing them from the failure list.
-	// So we should either delete them or mark them as deleted.
-	// Let's mark them as 'deleted' to keep history, or delete them if they are clutter.
-	// Given the table is `document_status_table`, deleting rows might be cleaner if they are truly gone.
-	// But let's check `statusMap` in frontend: 'deleted': '已删除'.
-	// So updating status to 'deleted' seems appropriate.
-	if len(docIDs) > 0 {
+	// Update DocumentStatus records for successful ones
+	if len(successDocIDs) > 0 {
 		if err := h.db.Model(&erp.DocumentStatus{}).
-			Where("id IN ?", docIDs).
+			Where("id IN ?", successDocIDs).
 			Updates(map[string]interface{}{
 				"file_status": "deleted",
 				"failed_msg":  "", // Clear failure message so it doesn't show up in stats
