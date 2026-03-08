@@ -1317,6 +1317,7 @@ export default {
     cannotAnswer: 'Извините, я не могу ответить на этот вопрос.',
     summarizingAnswer: 'Подведение итогов ответа...',
     loading: 'Загрузка...',
+    openingFile: 'Открытие файла...',
     enterDescription: 'Введите описание',
     referencedContent: 'Использовано {count} связанных материалов',
     deepThinking: 'Глубокое мышление завершено',

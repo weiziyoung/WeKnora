@@ -255,6 +255,7 @@ export default {
     cannotAnswer: "抱歉，我无法回答这个问题。",
     summarizingAnswer: "总结答案中...",
     loading: "加载中...",
+    openingFile: "正在打开文件...",
     enterDescription: "输入描述",
     referencedContent: "引用了 {count} 个相关资料",
     deepThinking: "深度思考完成",

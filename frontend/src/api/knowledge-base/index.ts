@@ -1,4 +1,4 @@
-import { get, post, put, del, postUpload, getDown } from "../../utils/request";
+import { get, post, put, del, postUpload, getDown, getDownWithMeta } from "../../utils/request";
 
 // 知识库管理 API（列表、创建、获取、更新、删除、复制）
 export function listKnowledgeBases(params?: { agent_id?: string }) {
@@ -109,6 +109,10 @@ export function reparseKnowledge(id: string) {
 
 export function downKnowledgeDetails(id: string) {
   return getDown(`/api/v1/knowledge/${id}/download`);
+}
+
+export function downKnowledgeDetailsWithMeta(id: string) {
+  return getDownWithMeta(`/api/v1/knowledge/${id}/download`);
 }
 
 /** @param idsQueryString - query string with ids (e.g. ids=xxx&ids=yyy) */

@@ -229,6 +229,7 @@ export default {
     cannotAnswer: "죄송합니다, 이 질문에 답변할 수 없습니다.",
     summarizingAnswer: "답변 요약 중...",
     loading: "로딩 중...",
+    openingFile: "파일을 여는 중...",
     enterDescription: "설명 입력",
     referencedContent: "{count}개의 관련 자료 참조",
     deepThinking: "심층 분석 완료",

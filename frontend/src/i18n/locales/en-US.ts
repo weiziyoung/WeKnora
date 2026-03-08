@@ -1488,6 +1488,7 @@ export default {
     cannotAnswer: 'Sorry, I cannot answer this question.',
     summarizingAnswer: 'Summarizing answer...',
     loading: 'Loading...',
+    openingFile: 'Opening file...',
     referencedContent: '{count} related materials used',
     deepThinking: 'Deep thinking completed',
     knowledgeBaseQandA: 'Knowledge Base Q&A',

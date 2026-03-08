@@ -221,7 +221,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import ToolResultRenderer from './ToolResultRenderer.vue';
 import picturePreview from '@/components/picture-preview.vue';
-import { getChunkByIdOnly, downKnowledgeDetails } from '@/api/knowledge-base';
+import { getChunkByIdOnly, downKnowledgeDetailsWithMeta } from '@/api/knowledge-base';
 import { processContentUrls } from '@/utils/url';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useUIStore } from '@/stores/ui';
@@ -939,6 +939,131 @@ const onHoverOut = (e: Event) => {
 };
 
 // Handle clicking on a document reference to download/open it
+const DOC_MIME_MAP: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  txt: 'text/plain',
+  html: 'text/html',
+  htm: 'text/html',
+  json: 'application/json',
+  md: 'text/markdown',
+  svg: 'image/svg+xml'
+};
+
+const DOC_EXT_MAP: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'text/plain': 'txt',
+  'text/html': 'html',
+  'application/json': 'json',
+  'text/markdown': 'md',
+  'image/svg+xml': 'svg',
+  'application/zip': 'zip'
+};
+
+const getFileExt = (filename: string): string | undefined => {
+  const raw = (filename || '').trim();
+  if (!raw) return undefined;
+  const ext = raw.split('.').pop()?.toLowerCase();
+  return ext || undefined;
+};
+
+const parseDispositionFilename = (contentDisposition?: string): string | undefined => {
+  if (!contentDisposition) return undefined;
+  const utf8Match = contentDisposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim().replace(/^"|"$/g, ''));
+    } catch {
+      return utf8Match[1].trim().replace(/^"|"$/g, '');
+    }
+  }
+  const filenameMatch = contentDisposition.match(/filename\s*=\s*([^;]+)/i);
+  if (!filenameMatch?.[1]) return undefined;
+  return filenameMatch[1].trim().replace(/^"|"$/g, '');
+};
+
+const getMimeFromSignature = async (blob: Blob): Promise<string | undefined> => {
+  const headerBuf = await blob.slice(0, 16).arrayBuffer();
+  const header = new Uint8Array(headerBuf);
+  if (header.length >= 4 && header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46) return 'application/pdf';
+  if (header.length >= 4 && header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47) return 'image/png';
+  if (header.length >= 3 && header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return 'image/jpeg';
+  if (header.length >= 4 && header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x38) return 'image/gif';
+  if (header.length >= 4 && header[0] === 0x50 && header[1] === 0x4b && header[2] === 0x03 && header[3] === 0x04) return 'application/zip';
+
+  const textSample = await blob.slice(0, 512).text();
+  if (/<svg[\s>]/i.test(textSample)) return 'image/svg+xml';
+  return undefined;
+};
+
+const isPreviewableMime = (mime?: string) => {
+  if (!mime) return false;
+  return (
+    mime === 'application/pdf' ||
+    mime.startsWith('image/') ||
+    mime.startsWith('text/') ||
+    mime === 'application/json' ||
+    mime === 'image/svg+xml'
+  );
+};
+
+const buildDownloadName = (kbId: string, title: string, ext?: string) => {
+  const base = (title || '').trim();
+  if (base) {
+    if (getFileExt(base)) return base;
+    if (ext) return `${base}.${ext}`;
+    return base;
+  }
+  if (ext) return `knowledge-${kbId}.${ext}`;
+  return `knowledge-${kbId}`;
+};
+
+const triggerBlobDownload = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => {
+    window.URL.revokeObjectURL(url);
+  }, 1000);
+};
+
+const resolveDocBlob = async (response: Blob, kbId: string, title: string, dispositionFilename?: string) => {
+  const headerName = (dispositionFilename || '').trim();
+  const extFromHeader = getFileExt(headerName);
+  const extFromTitle = getFileExt(title);
+  const preferredName = (title || '').trim() || headerName;
+  let mimeType = extFromHeader ? DOC_MIME_MAP[extFromHeader] : undefined;
+  if (!mimeType && extFromTitle) {
+    mimeType = DOC_MIME_MAP[extFromTitle];
+  }
+  if (!mimeType && extFromHeader) {
+    mimeType = DOC_MIME_MAP[extFromHeader];
+  }
+  const rawType = response.type;
+  if (!mimeType && rawType && rawType !== 'application/octet-stream') {
+    mimeType = rawType;
+  }
+  if (!mimeType) {
+    mimeType = await getMimeFromSignature(response);
+  }
+  const ext = extFromHeader || extFromTitle || (mimeType ? DOC_EXT_MAP[mimeType] : undefined);
+  const filename = buildDownloadName(kbId, preferredName, ext);
+  const downloadFilename = headerName ? buildDownloadName(kbId, headerName, ext) : filename;
+  const blob = mimeType && mimeType !== rawType ? new Blob([response], { type: mimeType }) : response;
+  return { blob, mimeType, filename, downloadFilename };
+};
+
 const handleDocClick = async (kbId: string, title: string) => {
   if (!kbId) {
     MessagePlugin.warning(t('chat.cannotFindFileId') || '无法找到对应的文件ID');
@@ -947,45 +1072,33 @@ const handleDocClick = async (kbId: string, title: string) => {
 
   try {
     const loading = MessagePlugin.loading(t('chat.openingFile') || '正在打开文件...');
-    const response: any = await downKnowledgeDetails(kbId);
+    const response: any = await downKnowledgeDetailsWithMeta(kbId);
     
     // Check if response is Blob
-    if (response instanceof Blob) {
-      let blob = response;
-      // Try to detect MIME type from filename for better preview support
-      const filename = title || '';
-      const ext = filename.split('.').pop()?.toLowerCase();
-      const mimeMap: Record<string, string> = {
-        'pdf': 'application/pdf',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'txt': 'text/plain',
-        'html': 'text/html',
-        'htm': 'text/html',
-        'json': 'application/json',
-        'md': 'text/markdown',
-        'svg': 'image/svg+xml'
-      };
-      const mimeType = ext ? mimeMap[ext] : undefined;
-      if (mimeType) {
-        blob = new Blob([response], { type: mimeType });
+    const blobData = response?.data;
+    const contentDisposition = response?.headers?.['content-disposition'] || response?.headers?.['Content-Disposition'];
+    const dispositionFilename = parseDispositionFilename(contentDisposition);
+    if (blobData instanceof Blob) {
+      const { blob, mimeType, downloadFilename } = await resolveDocBlob(blobData, kbId, title, dispositionFilename);
+      if (isPreviewableMime(mimeType || blob.type)) {
+        const url = window.URL.createObjectURL(blob);
+        const newWindow = window.open(url, '_blank');
+        if (!newWindow) {
+          triggerBlobDownload(blob, downloadFilename);
+        }
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+        }, 1000);
+      } else {
+        triggerBlobDownload(blob, downloadFilename);
       }
-
-      const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      // Clean up URL object after a delay
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 1000);
     } else {
       // Handle error response (sometimes error is returned as JSON but axios treats as blob)
       // Check if it's a JSON blob
       // @ts-ignore
-      if (response.type === 'application/json') {
+      if (blobData?.type === 'application/json') {
         // @ts-ignore
-        const text = await response.text();
+        const text = await blobData.text();
         const json = JSON.parse(text);
         throw new Error(json.message || '文件打开失败');
       }

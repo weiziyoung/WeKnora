@@ -69,6 +69,10 @@ const processQueue = (error: any, token: string | null = null) => {
 
 instance.interceptors.response.use(
   (response) => {
+    const rawResponse = (response.config as any)?.rawResponse;
+    if (rawResponse) {
+      return response;
+    }
     // 根据业务状态码处理逻辑
     const { status, data } = response;
     if (status === 200 || status === 201) {
@@ -199,6 +203,14 @@ export async function getDown(url: string) {
     responseType: "blob",
   });
   return res
+}
+
+export async function getDownWithMeta(url: string) {
+  let res = await instance.get(url, {
+    responseType: "blob",
+    rawResponse: true,
+  } as any);
+  return res;
 }
 
 export function postUpload(url: string, data = {}, onUploadProgress?: (progressEvent: any) => void, config?: any) {

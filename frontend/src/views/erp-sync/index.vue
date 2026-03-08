@@ -230,7 +230,11 @@ const handleBatchRetry = async (row: FailureStat) => {
       try {
         confirmDia.hide();
         const res = await batchRetryFailures(row.reason);
-        MessagePlugin.success(`批量重试成功: 成功 ${res.success_count}, 失败 ${res.fail_count}`);
+        if (res.fail_count > 0) {
+          MessagePlugin.warning(`批量重试完成: 成功 ${res.success_count}, 失败 ${res.fail_count}`);
+        } else {
+          MessagePlugin.success(`批量重试成功: 共 ${res.success_count} 条`);
+        }
         fetchFailures();
       } catch (e) {
         MessagePlugin.error('批量重试失败');
@@ -248,7 +252,11 @@ const handleBatchDelete = async (row: FailureStat) => {
       try {
         confirmDia.hide();
         const res = await batchDeleteFailures(row.reason);
-        MessagePlugin.success(`批量删除成功: 成功 ${res.success_count}, 失败 ${res.fail_count}`);
+        if (res.fail_count > 0) {
+          MessagePlugin.warning(`批量删除完成: 成功 ${res.success_count}, 失败 ${res.fail_count}`);
+        } else {
+          MessagePlugin.success(`批量删除成功: 共 ${res.success_count} 条`);
+        }
         fetchFailures();
       } catch (e) {
         MessagePlugin.error('批量删除失败');
