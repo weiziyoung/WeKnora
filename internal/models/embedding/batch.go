@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/models/utils"
@@ -55,9 +56,24 @@ func (e *batchEmbedder) BatchEmbedWithPool(ctx context.Context, model Embedder, 
 		})
 
 		// Try to embed
-		embeddings, err := model.BatchEmbed(ctx, textStrings)
-		if err == nil {
-			return embeddings, nil
+		var embeddings [][]float32
+		var err error
+
+		for i := 0; i < 10; i++ {
+			embeddings, err = model.BatchEmbed(ctx, textStrings)
+			if err == nil {
+				return embeddings, nil
+			}
+
+			// Check for 429 error
+			if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "Too Many Requests") {
+				logger.GetLogger(ctx).Warnf("BatchEmbed failed with 429, waiting 2s before retry (attempt %d/5)", i+1)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+
+			// If not 429, break the loop
+			break
 		}
 
 		// Check for 413 error
