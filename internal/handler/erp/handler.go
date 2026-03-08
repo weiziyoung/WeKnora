@@ -1,11 +1,14 @@
 package erp
 
 import (
+	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/models/erp"
+	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -233,44 +236,74 @@ func (h *Handler) BatchRetryFailures(c *gin.Context) {
 		return
 	}
 
-	successCount := 0
-	failCount := 0
-
-	successIDs := make([]int, 0)
+	// Filter valid docs
+	var validDocs []erp.DocumentStatus
+	var validIDs []int
 	for _, doc := range docs {
-		if doc.KnowledgeID == "" {
-			logger.Warnf(ctx, "Skipping document with empty KnowledgeID: %s", doc.Filename)
-			failCount++
-			continue
-		}
-
-		// Call ReparseKnowledge
-		if _, err := h.kgService.ReparseKnowledge(ctx, doc.KnowledgeID); err != nil {
-			logger.Errorf(ctx, "Failed to reparse knowledge %s: %v", doc.KnowledgeID, err)
-			failCount++
-		} else {
-			successCount++
-			successIDs = append(successIDs, doc.ID)
+		if doc.KnowledgeID != "" {
+			validDocs = append(validDocs, doc)
+			validIDs = append(validIDs, doc.ID)
 		}
 	}
 
-	if len(successIDs) > 0 {
-		if err := h.db.Model(&erp.DocumentStatus{}).
-			Where("id IN ?", successIDs).
-			Updates(map[string]interface{}{
-				"file_status": "pending",
-				"failed_msg":  "",
-			}).Error; err != nil {
-			logger.Errorf(ctx, "Failed to update document status to pending: %v", err)
-		}
+	if len(validIDs) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "No valid documents to retry",
+			"total":   len(docs),
+		})
+		return
 	}
 
-	logger.Infof(ctx, "Batch retry completed. Success: %d, Failed: %d", successCount, failCount)
+	// Update status to pending immediately
+	if err := h.db.Model(&erp.DocumentStatus{}).
+		Where("id IN ?", validIDs).
+		Updates(map[string]interface{}{
+			"file_status": "pending",
+			"failed_msg":  "",
+			"process_at":  time.Now(),
+			"finish_at":   nil,
+		}).Error; err != nil {
+		logger.Errorf(ctx, "Failed to update document status to pending: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Async process
+	tenantID := ctx.Value(types.TenantIDContextKey)
+	go func(targetDocs []erp.DocumentStatus, tid interface{}) {
+		bgCtx := context.Background()
+		if tid != nil {
+			bgCtx = context.WithValue(bgCtx, types.TenantIDContextKey, tid)
+		}
+
+		successCount := 0
+		failCount := 0
+
+		for _, doc := range targetDocs {
+			// Call ReparseKnowledge
+			if _, err := h.kgService.ReparseKnowledge(bgCtx, doc.KnowledgeID); err != nil {
+				logger.Errorf(bgCtx, "Failed to reparse knowledge %s: %v", doc.KnowledgeID, err)
+				failCount++
+				// Revert status to failed
+				h.db.Model(&erp.DocumentStatus{}).Where("id = ?", doc.ID).Updates(map[string]interface{}{
+					"file_status": "failed",
+					"failed_msg":  err.Error(),
+					"finish_at":   time.Now(),
+				})
+			} else {
+				successCount++
+			}
+		}
+		logger.Infof(bgCtx, "Batch retry background task completed. Success: %d, Failed: %d", successCount, failCount)
+	}(validDocs, tenantID)
+
+	logger.Infof(ctx, "Batch retry task submitted. Total: %d, Processing: %d", len(docs), len(validDocs))
 	c.JSON(http.StatusOK, gin.H{
-		"success":       true,
-		"total":         len(docs),
-		"success_count": successCount,
-		"fail_count":    failCount,
+		"success":          true,
+		"message":          "Batch retry task submitted",
+		"total":            len(docs),
+		"processing_count": len(validDocs),
 	})
 }
 
