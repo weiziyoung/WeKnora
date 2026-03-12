@@ -120,7 +120,7 @@ def main():
         
         # 1. Get existing DB files (excluding already deleted ones)
         logging.info("Fetching existing records from database...")
-        existing_docs = session.query(DocumentStatus).filter(DocumentStatus.file_status != 'deleted').all()
+        existing_docs = session.query(DocumentStatus).all()
         db_files = {doc.filepath: doc for doc in existing_docs}
         
         # 2. Scan current files on disk
