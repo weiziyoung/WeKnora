@@ -31,8 +31,8 @@
                             <ContentPopup :content="renderMarkdown(item.content)" :is-html="true" />
                         </template>
                         <span class="doc" @click="handleDocClick(item)">
-                            {{ session.knowledge_references.length < 2 ? item.knowledge_title : `${index +
-                                1}.${item.knowledge_title}` }} </span>
+                            {{ session.knowledge_references.length < 2 ? item.knowledge_filename : `${index +
+                                1}.${item.knowledge_filename}` }} </span>
                     </t-popup>
                 </template>
             </div>
