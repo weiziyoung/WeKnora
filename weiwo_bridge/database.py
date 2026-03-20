@@ -10,7 +10,7 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres123!@#")
-DB_NAME = os.getenv("DB_NAME", "weknora")
+DB_NAME = os.getenv("DB_NAME", "WeKnora")
 
 encoded_password = urllib.parse.quote_plus(DB_PASSWORD)
 DATABASE_URL = f"postgresql://{DB_USER}:{encoded_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
@@ -38,7 +38,7 @@ class DocumentStatus(Base):
     # New fields
     contract_title = Column(String, comment='合同标题', index=True)  # 合同标题
     contract_ord = Column(Integer, comment='合同序号', index=True)    # 合同序号
-    zb_link = Column(Integer, comment='智邦系统链接',index=True)     # 智邦系统链接
+    zb_link = Column(String, comment='智邦系统链接',index=True)     # 智邦系统链接
 
 class ScriptProcessRecord(Base):
     __tablename__ = 'script_process_record'

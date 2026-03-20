@@ -34,9 +34,26 @@ CAPTCHA_RETRY = int(os.getenv("MOCK_LOGIN_CAPTCHA_RETRY", "3"))
 WAIT_SECONDS = int(os.getenv("MOCK_LOGIN_WAIT_SECONDS", "15"))
 SERVER_INSTANCE = "WIN-K2TPMMTJLJM"
 
+DOWNLOAD_CONNECT_TIMEOUT_SECONDS = int(os.getenv("DOWNLOAD_CONNECT_TIMEOUT_SECONDS", "10"))
+DOWNLOAD_READ_TIMEOUT_SECONDS = int(os.getenv("DOWNLOAD_READ_TIMEOUT_SECONDS", "60"))
+DOWNLOAD_MAX_SECONDS = int(os.getenv("DOWNLOAD_MAX_SECONDS", "300"))
+DOWNLOAD_PROGRESS_LOG_INTERVAL_SECONDS = int(os.getenv("DOWNLOAD_PROGRESS_LOG_INTERVAL_SECONDS", "30"))
+DOWNLOAD_RETRY_MAX = int(os.getenv("DOWNLOAD_RETRY_MAX", "3"))
+DOWNLOAD_RETRY_BACKOFF_SECONDS = float(os.getenv("DOWNLOAD_RETRY_BACKOFF_SECONDS", "2"))
+
 # Constants for WeKnora API
 WEKNORA_API_URL = os.getenv('WEKNORA_API_URL', 'http://localhost:8000')
 WEKNORA_API_KEY = 'sk-06OSFVXX3uEPKxgxx4YhGbx-VCjujpAAC8MpxMxJL-wv4CbQ'
+
+
+SUPPORTED_EXTENSIONS = {
+    '.pdf', '.doc', '.docx', '.md', '.markdown', '.txt',
+    '.xlsx', '.xls', '.csv',
+    '.jpg', '.jpeg', '.png', '.gif'
+}
+
+class UnsupportedFileExtensionError(Exception):
+    pass
 
 class WeiWoSession:
     def __init__(self):
@@ -186,8 +203,9 @@ class WeiWoSession:
         except Exception:
             return
 
-    def login(self) -> requests.Session:
-        if self.session:
+
+    def login(self, force_refresh: bool = False) -> requests.Session:
+        if self.session and not force_refresh:
             return self.session
             
         self.driver = self._create_driver()
@@ -265,7 +283,7 @@ class WeiWoSession:
             return basename
         return "downloaded_file.bin"
 
-    def download(self, url: str) -> Tuple[bytes, str, str]:
+    def download(self, url: str, retry_count: int = 0) -> Tuple[bytes, str, str]:
         """
         Download file content.
         Returns: (content_bytes, filename, md5_hash)
@@ -282,32 +300,115 @@ class WeiWoSession:
                 url = '/' + url
             url = base_url + url
 
-        response = self.session.get(url, timeout=60, stream=True)
-        response.raise_for_status()
+        try:
+            request_start_time = time.time()
+            with self.session.get(
+                url,
+                timeout=(DOWNLOAD_CONNECT_TIMEOUT_SECONDS, DOWNLOAD_READ_TIMEOUT_SECONDS),
+                stream=True,
+            ) as response:
+                request_elapsed = time.time() - request_start_time
+                content_length = response.headers.get("Content-Length", "unknown")
+                logging.info(
+                    f"Request headers received in {request_elapsed:.2f}s, status={response.status_code}, content_length={content_length}, url={url}"
+                )
 
-        filename = self._extract_filename_from_response(response, url)
-        
-        content = b""
-        md5_hash = hashlib.md5()
-        
-        for chunk in response.iter_content(chunk_size=8192):
-            if not chunk:
-                continue
-            content += chunk
-            md5_hash.update(chunk)
-            
-        return content, filename, md5_hash.hexdigest()
+                response.raise_for_status()
+
+                filename = self._extract_filename_from_response(response, url)
+                ext = os.path.splitext(filename)[1].lower()
+                # Skip extension check for fallback filename "downloaded_file.bin"
+                # This usually means the server didn't provide a Content-Disposition header, often an error page
+                if filename != "downloaded_file.bin" and ext not in SUPPORTED_EXTENSIONS:
+                    logging.warning(f"Skipping unsupported file type: {filename} ({ext})")
+                    raise UnsupportedFileExtensionError(f"Unsupported file extension: {ext}")
+
+                chunks = []
+                md5_hash = hashlib.md5()
+                bytes_downloaded = 0
+                download_start_time = time.time()
+                last_progress_log_time = download_start_time
+
+                # Use a larger chunk size (128KB) for better network throughput
+                for chunk in response.iter_content(chunk_size=131072):
+                    now = time.time()
+                    if now - download_start_time > DOWNLOAD_MAX_SECONDS:
+                        raise TimeoutError(
+                            f"Download exceeded {DOWNLOAD_MAX_SECONDS}s: downloaded={bytes_downloaded} bytes, filename={filename}, url={url}"
+                        )
+                    if not chunk:
+                        continue
+                    chunks.append(chunk)
+                    bytes_downloaded += len(chunk)
+                    md5_hash.update(chunk)
+                    if now - last_progress_log_time >= DOWNLOAD_PROGRESS_LOG_INTERVAL_SECONDS:
+                        elapsed_download = now - download_start_time
+                        logging.info(
+                            f"Downloading {filename}: {bytes_downloaded} bytes in {elapsed_download:.2f}s, url={url}"
+                        )
+                        last_progress_log_time = now
+                
+                content = b"".join(chunks)
+
+                total_download_elapsed = time.time() - download_start_time
+                logging.info(
+                    f"Download completed: filename={filename}, size={bytes_downloaded} bytes, elapsed={total_download_elapsed:.2f}s, url={url}"
+                )
+
+                # Check if content is suspiciously small or if filename indicates a missing Content-Disposition (likely an error page)
+                if len(content) < 5120 or filename == "downloaded_file.bin":
+                    logging.warning(f"Downloaded content size is small ({len(content)} bytes) or filename is default ('{filename}') from {url}")
+                    try:
+                        text_content = content.decode('utf-8', errors='ignore')
+                        logging.warning(f"Small content preview: {text_content[:500]}")
+                    except Exception:
+                        pass
+
+                    if retry_count < DOWNLOAD_RETRY_MAX:
+                        backoff_seconds = DOWNLOAD_RETRY_BACKOFF_SECONDS * (retry_count + 1)
+                        logging.info("Suspecting session expired or download failed. Re-logging and retrying...")
+                        time.sleep(backoff_seconds)
+                        self.login(force_refresh=True)
+                        return self.download(url, retry_count=retry_count + 1)
+                    else:
+                        raise RuntimeError(f"Download failed after retry: Content too small ({len(content)} bytes) or filename is '{filename}'")
+
+                return content, filename, md5_hash.hexdigest()
+
+        except Exception as e:
+            if isinstance(e, UnsupportedFileExtensionError):
+                raise e
+            if retry_count < DOWNLOAD_RETRY_MAX:
+                backoff_seconds = DOWNLOAD_RETRY_BACKOFF_SECONDS * (retry_count + 1)
+                logging.warning(
+                    f"Download error (attempt {retry_count + 1}/{DOWNLOAD_RETRY_MAX + 1}): {e}. Retrying after {backoff_seconds:.1f}s..."
+                )
+                time.sleep(backoff_seconds)
+                if isinstance(e, requests.exceptions.HTTPError):
+                    self.login(force_refresh=True)
+                return self.download(url, retry_count=retry_count + 1)
+            raise e
 
 # Configuration
 # Default to D:\dump_data as per instructions, but allow override for testing
 DUMP_DATA_DIR = os.getenv('DUMP_DATA_DIR', r'D:\dump_data')
 
 # Setup logging
+# Ensure standard streams use UTF-8 on Windows to avoid UnicodeEncodeError
+if sys.platform.startswith('win'):
+    try:
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("link_filename_path.log"),
+        logging.FileHandler("link_filename_path.log", encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -466,35 +567,40 @@ def process_database_folder(session: Session, db_folder_path: str, session_manag
     checkpoint = get_last_checkpoint(session)
     
     # Perform export
+
     export_contract_from_db(db_name, contract_file, checkpoint)
 
     if not os.path.exists(contract_file):
-        logging.warning(f"No contract.csv found in {db_folder_path} after export attempt.")
-        return 0, 0
+        msg = f"No contract.csv found in {db_folder_path} after export attempt."
+        logging.warning(msg)
+        raise FileNotFoundError(msg)
 
     logging.info(f"Processing {contract_file}")
     
     # Attempt to read with likely encodings
     # SQL Server dumps often use local codepage (e.g. GBK/CP936) or UTF-16
-    encodings = ['utf-8', 'gbk', 'utf-16', 'cp936']
+    encodings = ['GB2312', 'utf-8']
     lines = None
     
     for enc in encodings:
         try:
-            with open(contract_file, 'r', encoding=enc) as f:
+            with open(contract_file, 'r', encoding=enc, errors="ignore") as f:
                 # Read all lines to avoid keeping file handle open too long
                 lines = f.readlines()
             logging.info(f"Successfully read {contract_file} using {enc} encoding.")
             break
         except UnicodeDecodeError:
+            logging.info(f"failed to decode {contract_file} with {enc} encoding.")
             continue
         except Exception as e:
-            logging.error(f"Error reading {contract_file}: {e}")
-            return 0, 0
+            msg = f"Error reading {contract_file}: {e}"
+            logging.error(msg)
+            raise RuntimeError(msg)
             
     if lines is None:
-        logging.error(f"Failed to decode {contract_file} with supported encodings.")
-        return 0, 0
+        msg = f"Failed to decode {contract_file} with supported encodings."
+        logging.error(msg)
+        raise ValueError(msg)
 
     if not lines:
         logging.info(f"File {contract_file} is empty (no records to process).")
@@ -502,6 +608,7 @@ def process_database_folder(session: Session, db_folder_path: str, session_manag
 
     update_count = 0
     skip_count = 0
+    last_commit_update_count = 0
     
     for line in lines:
         line = line.strip()
@@ -528,6 +635,7 @@ def process_database_folder(session: Session, db_folder_path: str, session_manag
             content = "\t".join(parts[2:]).strip()
             
             extracted_files = parse_content(content)
+            print(extracted_files)
             
             for file_info in extracted_files:
                 # 3. Handle zbpath files
@@ -535,10 +643,18 @@ def process_database_folder(session: Session, db_folder_path: str, session_manag
                     zb_path = file_info['zbpath']
                     filename = file_info['filename']
                     
+                    # Check if this zbpath has already been processed
+                    existing_zb = session.query(DocumentStatus).filter(DocumentStatus.zb_link == zb_path).first()
+                    if existing_zb:
+                        logging.info(f"Skipping zbpath {zb_path} (already processed).")
+                        skip_count += 1
+                        continue
+
                     try:
                         # Download and get MD5
-                        logging.info(f"Downloading zbpath: {zb_path}")
-                        content, real_filename, md5_val = session_manager.download(zb_path)
+                        full_zb_path = f"http://192.168.1.70:1011/{zb_path.lstrip('/')}"
+                        logging.info(f"Downloading zbpath: {full_zb_path}")
+                        content, real_filename, md5_val = session_manager.download(full_zb_path)
                         
                         # Search DB by MD5
                         doc = session.query(DocumentStatus).filter(DocumentStatus.file_hash == md5_val).first()
@@ -554,8 +670,9 @@ def process_database_folder(session: Session, db_folder_path: str, session_manag
                                 doc.filename = filename
                                 doc.contract_title = title
                                 doc.contract_ord = ord_val
+                                doc.zb_link = zb_path # Update zb_link
 
-                                if doc.file_status == 'completed' and doc.knowledge_id:
+                                if doc.knowledge_id:
                                     # new_title = title + "_" + filename(without extension)
                                     filename_no_ext = os.path.splitext(filename)[0]
                                     new_title_val = f"{title}_{filename_no_ext}"
@@ -566,7 +683,15 @@ def process_database_folder(session: Session, db_folder_path: str, session_manag
 
                                 update_count += 1
                             else:
-                                skip_count += 1
+                                # Even if filename matches, we should update zb_link if it's missing
+                                if not doc.zb_link:
+                                    doc.zb_link = zb_path
+                                    doc.contract_title = title
+                                    doc.contract_ord = ord_val
+                                    update_count += 1
+                                    logging.info(f"Updated zb_link for {doc.filename}")
+                                else:
+                                    skip_count += 1
                         else:
                             logging.warning(f"No DB record found for MD5: {md5_val} (zbpath: {zb_path})")
                             skip_count += 1
@@ -582,10 +707,27 @@ def process_database_folder(session: Session, db_folder_path: str, session_manag
                         update_count += 1
                     else:
                         skip_count += 1
-                        
+        
+            # Batch commit every 10 updates to save progress
+            if update_count - last_commit_update_count >= 10:
+                try:
+                    session.commit()
+                    logging.info(f"Committed {update_count} updates...")
+                    last_commit_update_count = update_count
+                except Exception as e:
+                    logging.error(f"Error during batch commit: {e}")
+                    session.rollback()
+
         except Exception as e:
             logging.error(f"Error processing line in {contract_file}: {e}")
             
+    # Final commit for the file
+    try:
+        session.commit()
+    except Exception as e:
+        logging.error(f"Error during final commit for {contract_file}: {e}")
+        session.rollback()
+
     logging.info(f"Finished {contract_file}. Updated: {update_count}, Skipped/NoChange: {skip_count}")
     return update_count, skip_count
 
@@ -684,7 +826,7 @@ def main():
         # Iterate over subdirectories in DUMP_DATA_DIR
         # Each subdirectory corresponds to a database
         for entry in os.scandir(DUMP_DATA_DIR):
-            if entry.is_dir():
+            if entry.is_dir() and "zbintel117_erp" == entry.name:
                 logging.info(f"Scanning database folder: {entry.name}")
                 updated, skipped = process_database_folder(session, entry.path, session_manager)
                 total_updated += updated
