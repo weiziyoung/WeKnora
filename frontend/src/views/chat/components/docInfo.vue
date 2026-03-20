@@ -101,7 +101,7 @@ const handleDocClick = async (item) => {
         if (response instanceof Blob) {
             let blob = response;
             // Try to detect MIME type from filename for better preview support
-            const filename = item.knowledge_title || '';
+            const filename = item.file_name || item.knowledge_title || '';
             const ext = filename.split('.').pop().toLowerCase();
             const mimeMap = {
                 'pdf': 'application/pdf',
