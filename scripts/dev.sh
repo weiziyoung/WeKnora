@@ -218,12 +218,14 @@ restart_services() {
 
 # 查看日志
 show_logs() {
+    check_docker || return 1
     cd "$PROJECT_ROOT"
     "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD -f docker-compose.dev.yml logs -f
 }
 
 # 查看状态
 show_status() {
+    check_docker || return 1
     cd "$PROJECT_ROOT"
     "$DOCKER_COMPOSE_BIN" $DOCKER_COMPOSE_SUBCMD -f docker-compose.dev.yml ps
 }
@@ -251,14 +253,23 @@ start_app() {
         return 1
     fi
     
-    # 设置本地开发环境变量（覆盖 Docker 容器地址）
-    export DB_HOST=localhost
-    export DOCREADER_ADDR=localhost:50051
-    export MINIO_ENDPOINT=localhost:9000
-    export REDIS_ADDR=localhost:6379
-    export OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
-    export NEO4J_URI=bolt://localhost:7687
-    export QDRANT_HOST=localhost
+    # 加载本地开发环境配置（覆盖 Docker 容器地址）
+    if [ -f ".env.dev" ]; then
+        log_info "加载 .env.dev 文件..."
+        set -a
+        source .env.dev
+        set +a
+    else
+        # 兼容旧行为：如果不存在 .env.dev，则设置默认的本地开发变量
+        log_info "未检测到 .env.dev，使用默认本地配置..."
+        export DB_HOST=localhost
+        export DOCREADER_ADDR=localhost:50051
+        export MINIO_ENDPOINT=localhost:9000
+        export REDIS_ADDR=localhost:6379
+        export OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
+        export NEO4J_URI=bolt://localhost:7687
+        export QDRANT_HOST=localhost
+    fi
     
     # 确保必要的环境变量已设置
     if [ -z "$DB_DRIVER" ]; then

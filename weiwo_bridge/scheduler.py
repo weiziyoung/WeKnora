@@ -66,18 +66,18 @@ def main():
     tasks = [
         ScheduledTask(
             script_path=os.path.join(base_dir, "discover_files.py"),
-            interval_seconds=600,  # 10 minutes
+            interval_seconds=2400,  # 20 minutes
             name="Discover Files"
         ),
         ScheduledTask(
-            script_path=os.path.join(base_dir, "submit_task.py"),
-            interval_seconds=120,  # 2 minutes
-            name="Submit Task"
+            script_path=os.path.join(base_dir, "polling_task.py"),
+            interval_seconds=60,  # 30s
+            name="Polling Task"
         ),
         ScheduledTask(
-            script_path=os.path.join(base_dir, "polling_task.py"),
-            interval_seconds=120,  # 2 minutes
-            name="Polling Task"
+            script_path=os.path.join(base_dir, "submit_task.py"),
+            interval_seconds=300 , 
+            name="Submit Task"
         )
     ]
 

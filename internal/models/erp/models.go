@@ -22,7 +22,7 @@ type DocumentStatus struct {
 	DatabaseName     string     `gorm:"column:database_name;index" json:"database_name"`
 	ContractTitle    string     `gorm:"column:contract_title;index" json:"contract_title"`
 	ContractOrd      int        `gorm:"column:contract_ord;index" json:"contract_ord"`
-	ZbLink           int        `gorm:"column:zb_link;index" json:"zb_link"`
+	ZbLink           string     `gorm:"column:zb_link;index" json:"zb_link"`
 }
 
 // TableName 指定表名

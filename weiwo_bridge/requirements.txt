@@ -1,3 +1,6 @@
 requests
 flask
+flask-cors
 sqlalchemy
+psycopg2-binary
+alibabacloud-oss-v2

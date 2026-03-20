@@ -147,7 +147,7 @@ services:
       dockerfile: docker/Dockerfile.docreader
     container_name: WeKnora-docreader
     ports:
-      - "${DOCREADER_PORT:-50059}:50051"
+      - "${DOCREADER_PORT:-50259}:50051"
     volumes:
       - ./docreader:/app/docreader
     environment:
