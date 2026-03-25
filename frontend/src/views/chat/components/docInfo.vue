@@ -32,7 +32,8 @@
                         </template>
                         <span class="doc" @click="handleDocClick(item)">
                             {{ session.knowledge_references.length < 2 ? item.knowledge_filename : `${index +
-                                1}.${item.knowledge_filename}` }} </span>
+                                1}.${item.knowledge_filename}` }}
+                                 </span>
                     </t-popup>
                 </template>
             </div>
@@ -46,7 +47,7 @@ import { processContentUrls } from '@/utils/url';
 import ContentPopup from './tool-results/ContentPopup.vue';
 import { marked } from 'marked';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { downKnowledgeDetails } from '@/api/knowledge-base';
+import { downKnowledgeDetailsWithMeta } from '@/api/knowledge-base';
 
 // Configure marked
 marked.use({
@@ -87,6 +88,46 @@ const renderMarkdown = (content) => {
 };
 
 // 点击文档标题跳转到原始文件
+const parseDispositionFilename = (contentDisposition) => {
+    if (!contentDisposition) return '';
+    const utf8Match = contentDisposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+        try {
+            return decodeURIComponent(utf8Match[1].trim().replace(/^"|"$/g, ''));
+        } catch {
+            return utf8Match[1].trim().replace(/^"|"$/g, '');
+        }
+    }
+    const filenameMatch = contentDisposition.match(/filename\s*=\s*([^;]+)/i);
+    return filenameMatch?.[1]?.trim().replace(/^"|"$/g, '') || '';
+};
+
+const getDownloadFilename = (item, dispositionFilename = '') => {
+    const fallbackName = [
+        dispositionFilename,
+        item?.knowledge_filename,
+        item?.file_name,
+        item?.knowledge_title,
+        item?.title,
+    ].find((name) => typeof name === 'string' && name.trim());
+
+    return fallbackName?.trim() || `knowledge-${item?.knowledge_id || 'file'}`;
+};
+
+const triggerBlobDownload = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+    }, 1000);
+};
+
 const handleDocClick = async (item) => {
     if (!item.knowledge_id) {
         MessagePlugin.warning('无法找到对应的文件ID');
@@ -94,55 +135,28 @@ const handleDocClick = async (item) => {
     }
 
     try {
-        const loading = MessagePlugin.loading('正在打开文件...');
-        const response = await downKnowledgeDetails(item.knowledge_id);
-        
-        // Check if response is Blob
-        if (response instanceof Blob) {
-            let blob = response;
-            // Try to detect MIME type from filename for better preview support
-            const filename = item.file_name || item.knowledge_title || '';
-            const ext = filename.split('.').pop().toLowerCase();
-            const mimeMap = {
-                'pdf': 'application/pdf',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'png': 'image/png',
-                'gif': 'image/gif',
-                'txt': 'text/plain',
-                'html': 'text/html',
-                'htm': 'text/html',
-                'json': 'application/json',
-                'md': 'text/markdown',
-                'svg': 'image/svg+xml'
-            };
-            const mimeType = mimeMap[ext];
-            if (mimeType) {
-                blob = new Blob([response], { type: mimeType });
-            }
+        const loading = MessagePlugin.loading('正在下载文件...');
+        const response = await downKnowledgeDetailsWithMeta(item.knowledge_id);
+        const blob = response?.data;
+        const contentDisposition = response?.headers?.['content-disposition'] || response?.headers?.['Content-Disposition'];
+        const dispositionFilename = parseDispositionFilename(contentDisposition);
+        const filename = getDownloadFilename(item, dispositionFilename);
 
-            const url = window.URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            // Clean up URL object after a delay
-            setTimeout(() => {
-                window.URL.revokeObjectURL(url);
-            }, 1000);
-        } else {
-            // Handle error response (sometimes error is returned as JSON but axios treats as blob)
-             // Check if it's a JSON blob
-            if (response.type === 'application/json') {
-                const text = await response.text();
+        if (blob instanceof Blob) {
+            if (blob.type === 'application/json') {
+                const text = await blob.text();
                 const json = JSON.parse(text);
-                throw new Error(json.message || '文件打开失败');
+                throw new Error(json.message || '文件下载失败');
             }
-             // Should be unreachable if interceptor handles it, but safety first
-             throw new Error('文件打开失败');
+            triggerBlobDownload(blob, filename);
+        } else {
+            throw new Error('文件下载失败');
         }
         MessagePlugin.close(loading);
     } catch (error) {
         console.error('Failed to open file:', error);
         MessagePlugin.closeAll();
-        MessagePlugin.error(error.message || '文件打开失败');
+        MessagePlugin.error(error.message || '文件下载失败');
     }
 };
 

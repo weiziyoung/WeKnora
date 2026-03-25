@@ -111,8 +111,8 @@ export function downKnowledgeDetails(id: string) {
   return getDown(`/api/v1/knowledge/${id}/download`);
 }
 
-export function downKnowledgeDetailsWithMeta(id: string) {
-  return getDownWithMeta(`/api/v1/knowledge/${id}/download`);
+export function downKnowledgeDetailsWithMeta(id: string, config?: any) {
+  return getDownWithMeta(`/api/v1/knowledge/${id}/download`, config);
 }
 
 /** @param idsQueryString - query string with ids (e.g. ids=xxx&ids=yyy) */

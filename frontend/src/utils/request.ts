@@ -205,10 +205,11 @@ export async function getDown(url: string) {
   return res
 }
 
-export async function getDownWithMeta(url: string) {
+export async function getDownWithMeta(url: string, config: any = {}) {
   let res = await instance.get(url, {
     responseType: "blob",
     rawResponse: true,
+    ...config,
   } as any);
   return res;
 }

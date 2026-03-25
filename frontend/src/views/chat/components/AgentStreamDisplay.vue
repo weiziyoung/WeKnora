@@ -1132,6 +1132,26 @@ const buildDownloadName = (kbId: string, title: string, ext?: string) => {
   return `knowledge-${kbId}`;
 };
 
+const formatDownloadBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+};
+
+const buildDownloadProgressText = (loaded: number, total?: number) => {
+  if (total && total > 0) {
+    const progress = Math.min(100, Math.max(0, Math.round((loaded / total) * 100)));
+    return t('chat.downloadingFileProgress', { progress });
+  }
+  return t('chat.downloadingFileSize', { size: formatDownloadBytes(loaded) });
+};
+
 const triggerBlobDownload = (blob: Blob, filename: string) => {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1178,9 +1198,31 @@ const handleDocClick = async (kbId: string, title: string) => {
     return;
   }
 
+  let loading: any = null;
+  let lastProgressContent = '';
+  let lastProgressAt = 0;
+  const showDownloadLoading = (content: string) => {
+    if (loading) {
+      MessagePlugin.close(loading);
+    }
+    loading = MessagePlugin.loading(content);
+  };
+
   try {
-    const loading = MessagePlugin.loading(t('chat.openingFile') || '正在打开文件...');
-    const response: any = await downKnowledgeDetailsWithMeta(kbId);
+    showDownloadLoading(t('chat.downloadingFile') || '正在下载文件...');
+    const response: any = await downKnowledgeDetailsWithMeta(kbId, {
+      onDownloadProgress: (progressEvent: any) => {
+        const loaded = Number(progressEvent?.loaded || 0);
+        if (loaded <= 0) return;
+        const total = Number(progressEvent?.total || 0) || undefined;
+        const content = buildDownloadProgressText(loaded, total);
+        const now = Date.now();
+        if (content === lastProgressContent && now - lastProgressAt < 300) return;
+        lastProgressContent = content;
+        lastProgressAt = now;
+        showDownloadLoading(content);
+      }
+    });
     
     // Check if response is Blob
     const blobData = response?.data;
@@ -1202,10 +1244,14 @@ const handleDocClick = async (kbId: string, title: string) => {
       // Should be unreachable if interceptor handles it, but safety first
       throw new Error('文件打开失败');
     }
-    MessagePlugin.close(loading);
+    if (loading) {
+      MessagePlugin.close(loading);
+    }
   } catch (error: any) {
     console.error('Failed to open file:', error);
-    MessagePlugin.closeAll();
+    if (loading) {
+      MessagePlugin.close(loading);
+    }
     MessagePlugin.error(error.message || '文件打开失败');
   }
 };
@@ -1253,7 +1299,7 @@ const onRootClick = (e: Event) => {
     // If we have chunkId, try to resolve real knowledge_id (file ID)
     if (chunkId) {
       // Show loading
-      const loading = MessagePlugin.loading(t('chat.openingFile') || '正在打开文件...');
+      const loading = MessagePlugin.loading(t('chat.downloadingFile') || '正在下载文件...');
       
       getChunkByIdOnly(chunkId)
         .then((res: any) => {
@@ -1321,7 +1367,7 @@ const onRootKeydown = (e: KeyboardEvent) => {
       
       if (chunkId) {
         // Show loading
-        const loading = MessagePlugin.loading(t('chat.openingFile') || '正在打开文件...');
+        const loading = MessagePlugin.loading(t('chat.downloadingFile') || '正在下载文件...');
         
         getChunkByIdOnly(chunkId)
           .then((res: any) => {
