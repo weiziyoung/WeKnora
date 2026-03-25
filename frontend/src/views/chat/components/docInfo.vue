@@ -88,25 +88,42 @@ const renderMarkdown = (content) => {
 };
 
 // 点击文档标题跳转到原始文件
+const repairMojibakeFilename = (filename = '') => {
+    const normalizedName = filename.trim().replace(/^"|"$/g, '');
+    if (!normalizedName) return '';
+    const hasCjk = /[\u3400-\u9fff]/.test(normalizedName);
+    const maybeMojibake = /[À-ÿ]/.test(normalizedName);
+    const canMapToBytes = Array.from(normalizedName).every((char) => char.charCodeAt(0) <= 255);
+    if (hasCjk || !maybeMojibake || !canMapToBytes) {
+        return normalizedName;
+    }
+    try {
+        const bytes = Uint8Array.from(Array.from(normalizedName).map((char) => char.charCodeAt(0)));
+        return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+        return normalizedName;
+    }
+};
+
 const parseDispositionFilename = (contentDisposition) => {
     if (!contentDisposition) return '';
     const utf8Match = contentDisposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
     if (utf8Match?.[1]) {
         try {
-            return decodeURIComponent(utf8Match[1].trim().replace(/^"|"$/g, ''));
+            return repairMojibakeFilename(decodeURIComponent(utf8Match[1].trim().replace(/^"|"$/g, '')));
         } catch {
-            return utf8Match[1].trim().replace(/^"|"$/g, '');
+            return repairMojibakeFilename(utf8Match[1].trim().replace(/^"|"$/g, ''));
         }
     }
     const filenameMatch = contentDisposition.match(/filename\s*=\s*([^;]+)/i);
-    return filenameMatch?.[1]?.trim().replace(/^"|"$/g, '') || '';
+    return repairMojibakeFilename(filenameMatch?.[1] || '');
 };
 
 const getDownloadFilename = (item, dispositionFilename = '') => {
     const fallbackName = [
-        dispositionFilename,
         item?.knowledge_filename,
         item?.file_name,
+        dispositionFilename,
         item?.knowledge_title,
         item?.title,
     ].find((name) => typeof name === 'string' && name.trim());
