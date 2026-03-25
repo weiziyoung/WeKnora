@@ -1121,17 +1121,6 @@ const getMimeFromSignature = async (blob: Blob): Promise<string | undefined> => 
   return undefined;
 };
 
-const isPreviewableMime = (mime?: string) => {
-  if (!mime) return false;
-  return (
-    mime === 'application/pdf' ||
-    mime.startsWith('image/') ||
-    mime.startsWith('text/') ||
-    mime === 'application/json' ||
-    mime === 'image/svg+xml'
-  );
-};
-
 const buildDownloadName = (kbId: string, title: string, ext?: string) => {
   const base = (title || '').trim();
   if (base) {
@@ -1198,19 +1187,8 @@ const handleDocClick = async (kbId: string, title: string) => {
     const contentDisposition = response?.headers?.['content-disposition'] || response?.headers?.['Content-Disposition'];
     const dispositionFilename = parseDispositionFilename(contentDisposition);
     if (blobData instanceof Blob) {
-      const { blob, mimeType, downloadFilename } = await resolveDocBlob(blobData, kbId, title, dispositionFilename);
-      if (isPreviewableMime(mimeType || blob.type)) {
-        const url = window.URL.createObjectURL(blob);
-        const newWindow = window.open(url, '_blank');
-        if (!newWindow) {
-          triggerBlobDownload(blob, downloadFilename);
-        }
-        setTimeout(() => {
-          window.URL.revokeObjectURL(url);
-        }, 1000);
-      } else {
-        triggerBlobDownload(blob, downloadFilename);
-      }
+      const { blob, downloadFilename } = await resolveDocBlob(blobData, kbId, title, dispositionFilename);
+      triggerBlobDownload(blob, downloadFilename);
     } else {
       // Handle error response (sometimes error is returned as JSON but axios treats as blob)
       // Check if it's a JSON blob
